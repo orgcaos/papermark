@@ -63,7 +63,7 @@ export const sendVerificationRequestEmail = async (params: {
       verify: true,
       subject: "Login for Orgcaos Docket",
       react: emailTemplate,
-      test: process.env.NODE_ENV === "development",
+      test: false,
     }).catch((e) => {
       console.error("Failed to send verification email:", e);
     }),
