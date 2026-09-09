@@ -59,8 +59,9 @@ export const sendVerificationRequestEmail = async (params: {
   waitUntil(
     sendEmail({
       to: email as string,
+      from: process.env.RESEND_FROM_EMAIL || "Orgcaos Docket <onboarding@resend.dev>",
       verify: true,
-      subject: "Login for Papermark",
+      subject: "Login for Orgcaos Docket",
       react: emailTemplate,
       test: process.env.NODE_ENV === "development",
     }).catch((e) => {
