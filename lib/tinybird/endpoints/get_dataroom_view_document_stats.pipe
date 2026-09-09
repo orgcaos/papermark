@@ -9,7 +9,7 @@ SQL >
         SUM(duration) AS sum_duration,
         COUNT(DISTINCT pageNumber) AS pages_viewed
     FROM
-        page_views__v3
+        page_views
     WHERE
         viewId IN splitByChar(',', {{ String(viewIds, required=True) }})
     GROUP BY

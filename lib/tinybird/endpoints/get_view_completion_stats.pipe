@@ -7,7 +7,7 @@ SQL >
         viewId,
         versionNumber,
         COUNT(DISTINCT pageNumber) as pages_viewed
-    FROM page_views__v3
+    FROM page_views
     WHERE
         documentId = {{ String(documentId, required=True) }}
         AND viewId NOT IN splitByChar(',', {{ String(excludedViewIds, required=True) }})

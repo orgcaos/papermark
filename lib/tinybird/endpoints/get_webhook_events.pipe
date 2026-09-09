@@ -6,7 +6,7 @@ SQL >
     SELECT
         *
     FROM
-        webhook_events__v1
+        webhook_events
     WHERE
         webhook_id = {{ String(webhookId, required=True) }}
     ORDER BY
