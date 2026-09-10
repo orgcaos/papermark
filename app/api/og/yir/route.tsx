@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 
@@ -6,15 +9,18 @@ import { NextRequest } from "next/server";
 // edge speed (it's a low-traffic, cacheable share-card image), so the
 // default Node.js serverless runtime (much higher size limit) is used
 // instead — same output, just built differently.
+//
+// Font loading also had to change to match: fetch(new URL(..., import.meta.url))
+// is an Edge-runtime-only trick for reading local files, not real HTTP, and it
+// throws "fetch failed" under the plain Node.js runtime. fs.readFile from a
+// process.cwd()-relative path is the Node equivalent and returns a Buffer,
+// which ImageResponse's fonts option accepts directly.
 
 export async function GET(req: NextRequest) {
-  const inter = await fetch(
-    new URL("@/styles/Inter-Regular.ttf", import.meta.url),
-  ).then((res) => res.arrayBuffer());
-
-  const interBold = await fetch(
-    new URL("@/public/_static/Inter-Bold.ttf", import.meta.url),
-  ).then((res) => res.arrayBuffer());
+  const [inter, interBold] = await Promise.all([
+    readFile(path.join(process.cwd(), "styles/Inter-Regular.ttf")),
+    readFile(path.join(process.cwd(), "public/_static/Inter-Bold.ttf")),
+  ]);
 
   const year = req.nextUrl.searchParams.get("year") || "2024";
   const minutesSpentOnDocs =
