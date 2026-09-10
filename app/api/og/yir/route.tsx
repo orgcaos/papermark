@@ -1,7 +1,11 @@
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 
-export const runtime = "edge";
+// Not run on the Edge runtime: the bundled fonts push this route past
+// Vercel's 1MB Edge Function size limit on the Hobby plan. It doesn't need
+// edge speed (it's a low-traffic, cacheable share-card image), so the
+// default Node.js serverless runtime (much higher size limit) is used
+// instead — same output, just built differently.
 
 export async function GET(req: NextRequest) {
   const inter = await fetch(
