@@ -13,3 +13,7 @@ SQL >
         AND viewId NOT IN splitByChar(',', {{ String(excludedViewIds, required=True) }})
         AND time >= {{ Int64(since, required=True) }}
     GROUP BY viewId, versionNumber
+
+TYPE ENDPOINT
+
+TYPE ENDPOINT

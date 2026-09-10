@@ -11,7 +11,7 @@ export const getStripe = (account: boolean = false) => {
           process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_OLD ??
           "",
         {
-          apiVersion: "2024-06-20",
+          apiVersion: "2026-06-24.dahlia",
         },
       );
     } else {
@@ -20,7 +20,7 @@ export const getStripe = (account: boolean = false) => {
           process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ??
           "",
         {
-          apiVersion: "2024-06-20",
+          apiVersion: "2026-06-24.dahlia",
         },
       );
     }

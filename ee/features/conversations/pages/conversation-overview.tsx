@@ -62,7 +62,13 @@ export interface ConversationSummary {
   };
 }
 
-export default function DataroomConversationsPage() {
+export default function DataroomConversationsPage(_props?: {
+  // Accepted so the conversation-detail route (which deep-links to one
+  // conversation) can render this page without a type error. Q&A
+  // conversations are out of scope for this deployment, so this still just
+  // renders the plain list rather than auto-opening the requested thread.
+  initialConversationId?: string;
+}) {
   const router = useRouter();
   const { limits, error: limitsError, loading: limitsLoading } = useLimits();
   const { dataroom } = useDataroom();

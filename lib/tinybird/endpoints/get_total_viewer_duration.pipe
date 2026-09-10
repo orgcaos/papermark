@@ -10,3 +10,7 @@ SQL >
     WHERE
         viewId IN splitByChar(',', {{ String(viewIds, required=true) }})
         AND time >= {{ Int64(since, required=true) }} 
+
+TYPE ENDPOINT
+
+TYPE ENDPOINT

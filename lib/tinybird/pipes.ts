@@ -17,7 +17,7 @@ const tb = new Tinybird({
 // but not in the SQL reads as a working time filter while returning all-time
 // numbers.
 export const getTotalAvgPageDuration = tb.buildPipe({
-  pipe: "get_total_average_page_duration__v5",
+  pipe: "get_total_average_page_duration",
   parameters: z.object({
     documentId: z.string(),
     excludedLinkIds: z.string().describe("Comma separated linkIds"),
@@ -33,7 +33,7 @@ export const getTotalAvgPageDuration = tb.buildPipe({
 });
 
 export const getViewPageDuration = tb.buildPipe({
-  pipe: "get_page_duration_per_view__v5",
+  pipe: "get_page_duration_per_view",
   parameters: z.object({
     documentId: z.string(),
     viewId: z.string(),
@@ -47,7 +47,7 @@ export const getViewPageDuration = tb.buildPipe({
 });
 
 export const getViewCompletionStats = tb.buildPipe({
-  pipe: "get_view_completion_stats__v1",
+  pipe: "get_view_completion_stats",
   parameters: z.object({
     documentId: z.string(),
     excludedViewIds: z.string().describe("Comma separated viewIds"),
@@ -61,7 +61,7 @@ export const getViewCompletionStats = tb.buildPipe({
 });
 
 export const getTotalDocumentDuration = tb.buildPipe({
-  pipe: "get_total_document_duration__v1",
+  pipe: "get_total_document_duration",
   parameters: z.object({
     documentId: z.string(),
     excludedLinkIds: z.string().describe("Comma separated linkIds"),
@@ -75,7 +75,7 @@ export const getTotalDocumentDuration = tb.buildPipe({
 });
 
 export const getTotalLinkDuration = tb.buildPipe({
-  pipe: "get_total_link_duration__v1",
+  pipe: "get_total_link_duration",
   parameters: z.object({
     linkId: z.string(),
     documentId: z.string(),
@@ -90,7 +90,7 @@ export const getTotalLinkDuration = tb.buildPipe({
 });
 
 export const getTotalViewerDuration = tb.buildPipe({
-  pipe: "get_total_viewer_duration__v1",
+  pipe: "get_total_viewer_duration",
   parameters: z.object({
     viewIds: z.string().describe("Comma separated viewIds"),
     since: z.number(),
@@ -102,7 +102,7 @@ export const getTotalViewerDuration = tb.buildPipe({
 });
 
 export const getViewUserAgent_v2 = tb.buildPipe({
-  pipe: "get_useragent_per_view__v2",
+  pipe: "get_useragent_per_view",
   parameters: z.object({
     documentId: z.string(),
     viewId: z.string(),
@@ -118,7 +118,7 @@ export const getViewUserAgent_v2 = tb.buildPipe({
 });
 
 export const getViewUserAgent = tb.buildPipe({
-  pipe: "get_useragent_per_view__v3",
+  pipe: "get_useragent_per_view",
   parameters: z.object({
     viewId: z.string(),
   }),
@@ -132,7 +132,7 @@ export const getViewUserAgent = tb.buildPipe({
 });
 
 export const getTotalDataroomDuration = tb.buildPipe({
-  pipe: "get_total_dataroom_duration__v1",
+  pipe: "get_total_dataroom_duration",
   parameters: z.object({
     dataroomId: z.string(),
     excludedLinkIds: z.array(z.string()),
@@ -147,7 +147,7 @@ export const getTotalDataroomDuration = tb.buildPipe({
 });
 
 export const getDocumentDurationPerViewer = tb.buildPipe({
-  pipe: "get_document_duration_per_viewer__v1",
+  pipe: "get_document_duration_per_viewer",
   parameters: z.object({
     documentId: z.string(),
     viewIds: z.string().describe("Comma separated viewIds"),
@@ -158,7 +158,7 @@ export const getDocumentDurationPerViewer = tb.buildPipe({
 });
 
 export const getWebhookEvents = tb.buildPipe({
-  pipe: "get_webhook_events__v1",
+  pipe: "get_webhook_events",
   parameters: z.object({
     webhookId: z.string(),
   }),
@@ -176,7 +176,7 @@ export const getWebhookEvents = tb.buildPipe({
 });
 
 export const getVideoEventsByDocument = tb.buildPipe({
-  pipe: "get_video_events_by_document__v1",
+  pipe: "get_video_events_by_document",
   parameters: z.object({
     document_id: z.string(),
   }),
@@ -195,7 +195,7 @@ export const getVideoEventsByDocument = tb.buildPipe({
 });
 
 export const getVideoEventsByView = tb.buildPipe({
-  pipe: "get_video_events_by_view__v1",
+  pipe: "get_video_events_by_view",
   parameters: z.object({
     document_id: z.string(),
     view_id: z.string(),
@@ -209,7 +209,7 @@ export const getVideoEventsByView = tb.buildPipe({
 });
 
 export const getClickEventsByView = tb.buildPipe({
-  pipe: "get_click_events_by_view__v1",
+  pipe: "get_click_events_by_view",
   parameters: z.object({
     document_id: z.string(),
     view_id: z.string(),
@@ -226,7 +226,7 @@ export const getClickEventsByView = tb.buildPipe({
 });
 
 export const getDataroomViewDocumentStats = tb.buildPipe({
-  pipe: "get_dataroom_view_document_stats__v1",
+  pipe: "get_dataroom_view_document_stats",
   parameters: z.object({
     viewIds: z.string().describe("Comma separated viewIds"),
   }),
@@ -239,7 +239,7 @@ export const getDataroomViewDocumentStats = tb.buildPipe({
 });
 
 export const getTotalTeamDuration = tb.buildPipe({
-  pipe: "get_total_team_duration__v1",
+  pipe: "get_total_team_duration",
   parameters: z.object({
     documentIds: z.string().describe("Comma separated documentIds"),
     since: z.number(),

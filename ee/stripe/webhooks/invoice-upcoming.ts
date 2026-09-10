@@ -22,13 +22,16 @@ export async function invoiceUpcoming(
     return res.status(200).json({ received: true });
   }
 
-  // Check if this is a yearly subscription
+  // Check if this is a yearly subscription. Stripe moved the price off the
+  // line item directly onto item.pricing.price_details.price (which is a
+  // string ID unless expanded into a full Price object).
   const hasYearlyPlan = lineItems.some((item) => {
-    if (item.price && item.price.recurring) {
+    const price = item.pricing?.price_details?.price;
+    if (price && typeof price !== "string" && price.recurring) {
       return (
-        item.price.recurring.interval === "year" ||
-        (item.price.recurring.interval === "month" &&
-          item.price.recurring.interval_count === 12)
+        price.recurring.interval === "year" ||
+        (price.recurring.interval === "month" &&
+          price.recurring.interval_count === 12)
       );
     }
     return false;

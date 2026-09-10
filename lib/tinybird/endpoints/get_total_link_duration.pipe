@@ -10,3 +10,7 @@ SQL >
         AND time >= {{ Int64(since, required=true) }}
         AND documentId = {{ String(documentId, required=true) }}
         AND viewId NOT IN splitByChar(',', {{ String(excludedViewIds, required=true) }})
+
+TYPE ENDPOINT
+
+TYPE ENDPOINT

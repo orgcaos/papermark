@@ -55,7 +55,15 @@ export default async function handler(
     return res.status(403).json({ error: "Access denied" });
   }
 
-  const env = getSlackEnv();
+  // See the sibling integrations/slack/index.ts for why this is guarded:
+  // getSlackEnv() throws when Slack isn't configured, which is always true
+  // for this deployment.
+  let env: ReturnType<typeof getSlackEnv>;
+  try {
+    env = getSlackEnv();
+  } catch {
+    return res.status(404).json({ error: "Slack integration not found" });
+  }
 
   if (req.method === "GET") {
     try {

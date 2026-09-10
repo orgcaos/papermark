@@ -73,7 +73,9 @@ export async function handleRoute(req: NextApiRequest, res: NextApiResponse) {
       // Use the actual current_period_end from Stripe, ensuring pause starts at next billing cycle
       // Never allow retroactive pausing - pauseStartsAt must be in the future
       const now = new Date();
-      const stripePeriodEnd = new Date(subscription.current_period_end * 1000);
+      const stripePeriodEnd = new Date(
+        subscription.items.data[0].current_period_end * 1000,
+      );
       const pauseStartsAt = stripePeriodEnd > now ? stripePeriodEnd : now;
 
       const pauseEndsAt = new Date(pauseStartsAt);

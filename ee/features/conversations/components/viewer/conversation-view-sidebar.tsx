@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import useSWR, { mutate } from "swr";
 
 import { fetcher } from "@/lib/utils";
-import { MAX_MESSAGE_LENGTH } from "@/lib/utils/sanitize-html";
+import { MAX_MESSAGE_LENGTH } from "@/lib/constants";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -56,7 +56,9 @@ export type ConversationSidebarProps = {
   linkId: string;
   viewId: string;
   dataroomId?: string;
+  dataroomName?: string;
   documentId?: string;
+  documentName?: string;
   pageNumber?: number;
   viewerId?: string;
   isEnabled?: boolean;

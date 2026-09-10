@@ -449,7 +449,6 @@ export function UpgradePlanModal({
 
                 const planFeatures = getPlanFeatures(effectivePlan, {
                   period,
-                  currency,
                   highlightFeatures: highlightForSelector,
                 });
 
@@ -573,11 +572,6 @@ export function UpgradePlanModal({
                         PLANS.find((p) => p.name === displayPlanName)?.price[
                           period
                         ].amount ?? 0
-                      }
-                      amountUsd={
-                        PLANS.find((p) => p.name === displayPlanName)?.price[
-                          period
-                        ].amountUsd
                       }
                       period={period}
                       currency={currency}

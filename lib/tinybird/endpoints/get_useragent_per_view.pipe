@@ -14,3 +14,7 @@ SQL >
     WHERE
         view_id = {{ String(viewId, required=True) }}
     LIMIT 1
+
+TYPE ENDPOINT
+
+TYPE ENDPOINT

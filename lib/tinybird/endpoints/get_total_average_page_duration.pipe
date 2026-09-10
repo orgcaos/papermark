@@ -19,3 +19,7 @@ SQL >
     FROM DistinctDurations
     GROUP BY versionNumber, pageNumber
     ORDER BY versionNumber ASC, pageNumber ASC
+
+TYPE ENDPOINT
+
+TYPE ENDPOINT

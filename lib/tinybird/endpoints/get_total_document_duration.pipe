@@ -10,3 +10,7 @@ SQL >
         AND time >= {{ Int64(since, required=true) }}
         AND linkId NOT IN splitByChar(',', {{ String(excludedLinkIds, required=True) }})
         AND viewId NOT IN splitByChar(',', {{ String(excludedViewIds, required=True) }})
+
+TYPE ENDPOINT
+
+TYPE ENDPOINT

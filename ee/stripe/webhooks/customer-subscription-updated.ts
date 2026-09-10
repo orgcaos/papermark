@@ -54,8 +54,12 @@ export async function customerSubsciptionUpdated(
 
   const newPlan = plan.slug;
   const subscriptionId = subscriptionUpdated.id;
-  const startsAt = new Date(subscriptionUpdated.current_period_start * 1000);
-  const endsAt = new Date(subscriptionUpdated.current_period_end * 1000);
+  const startsAt = new Date(
+    subscriptionUpdated.items.data[0].current_period_start * 1000,
+  );
+  const endsAt = new Date(
+    subscriptionUpdated.items.data[0].current_period_end * 1000,
+  );
   const quantity = subscriptionUpdated.items.data[0].quantity;
 
   let teamPlan = team.plan;

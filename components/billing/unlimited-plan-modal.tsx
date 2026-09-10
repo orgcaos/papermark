@@ -140,7 +140,6 @@ export function UnlimitedPlanModal({
 
             <PlanPrice
               amount={unlimitedPlan.price[period].amount}
-              amountUsd={unlimitedPlan.price[period].amountUsd}
               period={period}
               currency={currency}
             />

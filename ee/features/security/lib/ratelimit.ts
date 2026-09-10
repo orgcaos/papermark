@@ -23,6 +23,24 @@ export const rateLimiters = {
     enableProtection: true,
     analytics: true,
   }),
+
+  // Bulk link imports per team - keyed by teamId, not IP
+  bulkLinkImport: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(5, "1 h"),
+    prefix: "rl:bulk-link-import",
+    enableProtection: true,
+    analytics: true,
+  }),
+
+  // Domain verification checks per user+team
+  domainVerification: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(10, "10 m"),
+    prefix: "rl:domain-verification",
+    enableProtection: true,
+    analytics: true,
+  }),
 };
 
 /**

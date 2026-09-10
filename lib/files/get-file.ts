@@ -88,8 +88,16 @@ const getFileFromS3 = async (
   expiresIn?: number,
   responseContentDisposition?: string,
 ) => {
-  const isServer =
-    typeof window === "undefined" && !!process.env.INTERNAL_API_KEY;
+  // This must be decided purely by execution context, not by whether
+  // INTERNAL_API_KEY happens to be configured: the "else" (proxy) branch
+  // below calls a relative URL, which only resolves against the current
+  // page origin in a browser. Every real call site for this function
+  // (app/api/views/route.ts, trigger jobs, etc.) runs server-side, so
+  // gating on the env var meant "not configured" silently turned into
+  // "use the relative URL anyway", which always fails server-side with
+  // "Failed to parse URL". If INTERNAL_API_KEY is genuinely missing, the
+  // internal endpoint below already returns a clear 500 instead.
+  const isServer = typeof window === "undefined";
 
   if (isServer) {
     return fetchPresignedUrl(

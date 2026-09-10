@@ -1,15 +1,21 @@
 import prisma from "@/lib/prisma";
 
-import { SlackClient } from "./client";
+import { SlackClient, getSlackClient } from "./client";
 import { getSlackEnv } from "./env";
 import { createSlackMessage } from "./templates";
 import { SlackEventData, SlackIntegrationServer } from "./types";
 
 export class SlackEventManager {
-  private client: SlackClient;
-
-  constructor() {
-    this.client = new SlackClient();
+  // Resolved lazily via the shared getSlackClient() singleton instead of in
+  // the constructor: `slackEventManager` below is constructed eagerly at
+  // module load, and SlackClient's own constructor throws when
+  // SLACK_CLIENT_ID/SLACK_CLIENT_SECRET aren't set. The Slack integration is
+  // optional and this deployment doesn't configure it, so eager
+  // construction here crashed Next.js's build-time "collecting page data"
+  // step for every route that imports this module (e.g. the public
+  // view-tracking API) long before any Slack notification is ever sent.
+  private get client(): SlackClient {
+    return getSlackClient();
   }
 
   /**

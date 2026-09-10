@@ -12,3 +12,7 @@ SQL >
     ORDER BY
         timestamp DESC
     LIMIT 100
+
+TYPE ENDPOINT
+
+TYPE ENDPOINT

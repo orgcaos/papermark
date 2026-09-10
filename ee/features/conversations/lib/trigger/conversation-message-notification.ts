@@ -180,6 +180,22 @@ export const sendConversationMessageNotificationTask = task({
   },
 });
 
+// Not currently invoked anywhere in this app - no code path builds a
+// mention-specific notification separately from a new team-member message -
+// but the barrel re-export in lib/trigger/conversation-message-notification.ts
+// expects it to exist alongside the two tasks below.
+export const sendConversationMentionNotificationTask = task({
+  id: "send-conversation-mention-notification",
+  retry: { maxAttempts: 3 },
+  run: async (payload: NotificationPayload) => {
+    logger.info("sendConversationMentionNotificationTask invoked", {
+      conversationId: payload.conversationId,
+      teamId: payload.teamId,
+    });
+    return;
+  },
+});
+
 // New task specifically for notifying team members when viewers write messages
 export const sendConversationTeamMemberNotificationTask = task({
   id: "send-conversation-team-member-notification",

@@ -70,7 +70,18 @@ async function handleGet(
   res: NextApiResponse,
   teamId: string,
 ) {
-  const env = getSlackEnv();
+  // getSlackEnv() throws when SLACK_CLIENT_ID/SECRET etc. aren't configured,
+  // which is always true for this deployment (Slack notifications are out of
+  // scope). This route is polled unconditionally by the app sidebar on every
+  // authenticated page, so an uncaught throw here turned into a background
+  // 500 on every page load. Treat "not configured" the same as "not
+  // installed" instead of crashing.
+  let env: ReturnType<typeof getSlackEnv>;
+  try {
+    env = getSlackEnv();
+  } catch {
+    return res.status(404).json({ error: "Slack integration not found" });
+  }
 
   try {
     const integrationFullData = await prisma.installedIntegration.findUnique({
@@ -113,7 +124,12 @@ async function handleUpdate(
   res: NextApiResponse,
   teamId: string,
 ) {
-  const env = getSlackEnv();
+  let env: ReturnType<typeof getSlackEnv>;
+  try {
+    env = getSlackEnv();
+  } catch {
+    return res.status(404).json({ error: "Slack integration not found" });
+  }
   try {
     const validationResult = slackIntegrationUpdateSchema.safeParse(req.body);
 
@@ -189,7 +205,12 @@ async function handleDelete(
   res: NextApiResponse,
   teamId: string,
 ) {
-  const env = getSlackEnv();
+  let env: ReturnType<typeof getSlackEnv>;
+  try {
+    env = getSlackEnv();
+  } catch {
+    return res.status(404).json({ error: "Slack integration not found" });
+  }
   try {
     const integration = await prisma.installedIntegration.findUnique({
       where: {

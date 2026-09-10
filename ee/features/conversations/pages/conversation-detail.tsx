@@ -24,7 +24,7 @@ import z from "zod";
 import { useDataroom } from "@/lib/swr/use-dataroom";
 import { CustomUser } from "@/lib/types";
 import { fetcher } from "@/lib/utils";
-import { MAX_MESSAGE_LENGTH } from "@/lib/utils/sanitize-html";
+import { MAX_MESSAGE_LENGTH } from "@/lib/constants";
 
 import AppLayout from "@/components/layouts/app";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

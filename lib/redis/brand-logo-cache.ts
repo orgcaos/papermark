@@ -47,17 +47,17 @@ export async function readCachedBrandLogo(
  */
 export async function writeCachedBrandLogo(
   teamId: string,
-  brand: BrandLogoFields,
+  brand: BrandLogoFields | null,
 ): Promise<void> {
   const pipeline = redis.pipeline();
 
-  if (brand.logo) {
+  if (brand?.logo) {
     pipeline.set(logoKey(teamId), brand.logo);
   } else {
     pipeline.del(logoKey(teamId));
   }
 
-  if (brand.hideLogo) {
+  if (brand?.hideLogo) {
     pipeline.set(hideLogoKey(teamId), "1");
   } else {
     pipeline.del(hideLogoKey(teamId));
