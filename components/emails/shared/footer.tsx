@@ -26,11 +26,7 @@ export const Footer = ({
           </Link>
         </Text>
         <Text className="text-[12px] text-neutral-500">
-          Papermark, Inc.
-          <br />
-          1111B S Governors Ave #28117
-          <br />
-          Dover, DE 19904
+          Orgcaos Docket
         </Text>
       </>
     );
@@ -41,13 +37,7 @@ export const Footer = ({
       <Hr />
       <Section className="text-gray-400">
         <Text className="text-xs">
-          © {new Date().getFullYear()} Papermark, Inc. All rights reserved.{" "}
-          {withAddress && (
-            <>
-              <br />
-              1111B S Governors Ave #28117, Dover, DE 19904
-            </>
-          )}
+          © {new Date().getFullYear()} Orgcaos Docket. All rights reserved.
         </Text>
         <Text className="text-xs">{footerText}</Text>
       </Section>

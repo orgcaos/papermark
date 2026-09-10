@@ -35,12 +35,12 @@ export default function Register() {
       </div>
       <div className="z-10 mx-5 mt-[calc(20vh)] h-fit w-full max-w-md overflow-hidden rounded-sm border border-border bg-gray-50 dark:bg-gray-900 sm:mx-0 sm:shadow-xl">
         <div className="flex flex-col items-center justify-center space-y-3 px-4 py-6 pt-8 text-center sm:px-16">
-          <Link href="https://www.papermark.com" target="_blank">
+          <Link href="/">
             <Image
               src={PapermarkLogo}
               width={119}
               height={32}
-              alt="Papermark Logo"
+              alt="Orgcaos Docket"
             />
           </Link>
           <h3 className="text-2xl font-medium text-foreground">

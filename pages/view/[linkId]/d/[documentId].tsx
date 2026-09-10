@@ -132,7 +132,7 @@ function DataroomDocumentViewPageInner({
           enableBranding={meta.enableCustomMetatag ?? false}
           title={
             meta.metaTitle ??
-            `${link?.dataroomDocument?.document?.name} | Powered by Papermark`
+            `${link?.dataroomDocument?.document?.name} | Orgcaos Docket`
           }
           description={meta.metaDescription ?? null}
           imageUrl={meta.metaImage ?? null}
@@ -173,7 +173,7 @@ function DataroomDocumentViewPageInner({
         enableBranding={meta.enableCustomMetatag ?? false}
         title={
           meta.metaTitle ??
-          `${link?.dataroomDocument?.document?.name} | Powered by Papermark`
+          `${link?.dataroomDocument?.document?.name} | Orgcaos Docket`
         }
         description={meta.metaDescription ?? null}
         imageUrl={meta.metaImage ?? null}

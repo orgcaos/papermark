@@ -6,7 +6,6 @@ import { useRouter } from "next/router";
 import * as React from "react";
 import { useEffect, useState } from "react";
 
-import { TeamContextType, initialState, useTeam } from "@/context/team-context";
 import { PlanEnum } from "@/ee/stripe/constants";
 import Cookies from "js-cookie";
 import {
@@ -15,26 +14,20 @@ import {
   ContactIcon,
   FolderIcon,
   HouseIcon,
-  Loader,
-  ServerIcon,
   WorkflowIcon,
 } from "lucide-react";
 
 import { useFeatureFlags } from "@/lib/hooks/use-feature-flags";
 import { useIsAdmin } from "@/lib/hooks/use-is-admin";
-import { useSelfMembership } from "@/lib/hooks/use-self-membership";
 import { usePlan } from "@/lib/swr/use-billing";
-import useDataroomsSimple from "@/lib/swr/use-datarooms-simple";
 import useLimits from "@/lib/swr/use-limits";
 import { nFormatter } from "@/lib/utils";
 
 import { NavMain } from "@/components/sidebar/nav-main";
-import { TeamSwitcher } from "@/components/sidebar/team-switcher";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
@@ -45,10 +38,7 @@ import { Progress } from "../ui/progress";
 export function AppSidebarContent() {
   const router = useRouter();
   const [showProBanner, setShowProBanner] = useState<boolean | null>(null);
-  const { currentTeam, teams, setCurrentTeam, isLoading }: TeamContextType =
-    useTeam() || initialState;
-  const { isBusiness, isDatarooms, isDataroomsPlus, isFree, isTrial } =
-    usePlan();
+  const { isFree, isTrial } = usePlan();
 
   const { limits } = useLimits();
   const linksLimit = limits?.links;
@@ -60,13 +50,6 @@ export function AppSidebarContent() {
   // Check if current user is admin (for gating Security)
   const { isAdmin } = useIsAdmin();
 
-  // Dataroom-scoped members only ever see their assigned datarooms.
-  const { isDataroomMember } = useSelfMembership();
-
-  // Fetch datarooms for the current team (simple mode - no filters or extra data)
-  // For scoped members the API already restricts this to their assigned rooms.
-  const { datarooms } = useDataroomsSimple();
-
   useEffect(() => {
     if (Cookies.get("hideProBanner") !== "pro-banner") {
       setShowProBanner(true);
@@ -74,18 +57,6 @@ export function AppSidebarContent() {
       setShowProBanner(false);
     }
   }, []);
-
-  // Prepare datarooms items for sidebar (limit to first 5, sorted by most recent)
-  const dataroomItems =
-    datarooms && datarooms.length > 0
-      ? datarooms.slice(0, 5).map((dataroom) => ({
-          title: dataroom.internalName || dataroom.name,
-          url: `/datarooms/${dataroom.id}/documents`,
-          current:
-            router.pathname.includes("/datarooms/[id]") &&
-            String(router.query.id) === String(dataroom.id),
-        }))
-      : undefined;
 
   const data = {
     navMain: [
@@ -102,23 +73,6 @@ export function AppSidebarContent() {
         current:
           router.pathname.includes("documents") &&
           !router.pathname.includes("datarooms"),
-      },
-      {
-        title: "All Datarooms",
-        url: "/datarooms",
-        icon: ServerIcon,
-        current: router.pathname === "/datarooms",
-        disabled: !isBusiness && !isDatarooms && !isDataroomsPlus && !isTrial,
-        trigger: "sidebar_datarooms",
-        plan: PlanEnum.Business,
-        highlightItem: ["datarooms"],
-        isActive:
-          router.pathname.includes("datarooms") &&
-          (isBusiness || isDatarooms || isDataroomsPlus || isTrial),
-        items:
-          isBusiness || isDatarooms || isDataroomsPlus || isTrial
-            ? dataroomItems
-            : undefined,
       },
       {
         title: "Visitors",
@@ -195,48 +149,8 @@ export function AppSidebarContent() {
     return true;
   });
 
-  // Dataroom-scoped members get a single Datarooms section listing only their
-  // assigned rooms. Dashboard, All Documents, Visitors, Workflows, Branding and
-  // Settings are hidden — they have no access to those areas.
-  if (isDataroomMember) {
-    const scopedDataroomItems =
-      datarooms && datarooms.length > 0
-        ? datarooms.map((dataroom) => ({
-            title: dataroom.internalName || dataroom.name,
-            url: `/datarooms/${dataroom.id}/documents`,
-            current:
-              router.pathname.includes("/datarooms/[id]") &&
-              String(router.query.id) === String(dataroom.id),
-          }))
-        : undefined;
-
-    filteredNavMain = [
-      {
-        title: "Data Rooms",
-        url: "/datarooms",
-        icon: ServerIcon,
-        current: router.pathname === "/datarooms",
-        isActive: router.pathname.includes("datarooms"),
-        items: scopedDataroomItems,
-      },
-    ] as typeof filteredNavMain;
-  }
-
   return (
     <>
-      <SidebarHeader className="gap-y-0 pt-0">
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-sm">
-            <Loader className="h-5 w-5 animate-spin" /> Loading teams...
-          </div>
-        ) : (
-          <TeamSwitcher
-            currentTeam={currentTeam}
-            teams={teams}
-            setCurrentTeam={setCurrentTeam}
-          />
-        )}
-      </SidebarHeader>
       <SidebarContent>
         <NavMain items={filteredNavMain} />
       </SidebarContent>

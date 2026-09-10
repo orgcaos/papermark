@@ -82,3 +82,4 @@ _public/
 
 .opencode
 plans/
+.env*

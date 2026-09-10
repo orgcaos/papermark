@@ -1042,7 +1042,7 @@ export default function Branding() {
                               </Label>
                               <p className="text-xs text-muted-foreground">
                                 Visitors see no logo at all, not even the
-                                Papermark logo.
+                                Orgcaos Docket logo.
                               </p>
                             </div>
                           </div>
@@ -1650,7 +1650,7 @@ export default function Branding() {
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Link visitors to your own privacy policy at
                                     the bottom of the access screen instead of
-                                    Papermark&apos;s.
+                                    Orgcaos Docket&apos;s.
                                   </p>
                                 </div>
                                 <Switch

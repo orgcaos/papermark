@@ -105,15 +105,20 @@ export function usePlan({
     pauseStartsAt: plan?.pauseStartsAt,
     pauseEndsAt: plan?.pauseEndsAt,
     discount: plan?.discount || null,
-    isFree: parsedPlan.plan === "free",
-    isStarter: parsedPlan.plan === "starter",
-    isPro: parsedPlan.plan === "pro",
-    isBusiness: parsedPlan.plan === "business",
-    isDatarooms:
-      parsedPlan.plan === "datarooms" || parsedPlan.plan === "datarooms-plus" || parsedPlan.plan === "datarooms-premium" || parsedPlan.plan === "datarooms-unlimited",
-    isDataroomsPlus: parsedPlan.plan === "datarooms-plus" || parsedPlan.plan === "datarooms-premium" || parsedPlan.plan === "datarooms-unlimited",
-    isDataroomsPremium: parsedPlan.plan === "datarooms-premium" || parsedPlan.plan === "datarooms-unlimited",
-    isDataroomsUnlimited: parsedPlan.plan === "datarooms-unlimited",
+    // NOTE: This is a self-hosted, single-tenant deployment with no real
+    // billing/Stripe subscriptions -- there is no paid tier to actually be
+    // gated behind. These flags used to reflect team.plan and drove
+    // upgrade-nag "PlanBadge" tags and feature paywalls throughout the app;
+    // they're now hardcoded to "everything unlocked, nothing free-tier" so
+    // those tags and paywalls never appear.
+    isFree: false,
+    isStarter: false,
+    isPro: true,
+    isBusiness: true,
+    isDatarooms: true,
+    isDataroomsPlus: true,
+    isDataroomsPremium: true,
+    isDataroomsUnlimited: true,
     loading: !plan && !error && !!teamId, // Only show loading if we have a teamId but no data
     error,
     mutate,

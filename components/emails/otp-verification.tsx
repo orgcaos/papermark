@@ -38,7 +38,7 @@ export default function OtpEmailVerification({
         return (
           <Section className="mt-8">
             <Text className="text-2xl font-bold tracking-tighter">
-              Papermark
+              Orgcaos Docket
             </Text>
           </Section>
         );
@@ -63,7 +63,7 @@ export default function OtpEmailVerification({
             </Text>
             <Text className="text-sm leading-6 text-neutral-600">
               A verification code was requested to view the {resourceLabel}{" "}
-              shared with you on Papermark. Use this code to continue:
+              shared with you on Orgcaos Docket. Use this code to continue:
             </Text>
             <Section className="my-6">
               <Text
@@ -88,11 +88,7 @@ export default function OtpEmailVerification({
             <Hr className="my-6" />
             <Section className="text-gray-400">
               <Text className="text-xs text-neutral-500">
-                Papermark, Inc.
-                <br />
-                1111B S Governors Ave #28117
-                <br />
-                Dover, DE 19904
+                Orgcaos Docket
               </Text>
             </Section>
           </Container>

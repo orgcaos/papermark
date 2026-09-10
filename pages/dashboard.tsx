@@ -42,7 +42,7 @@ interface OverviewData {
   hasLinks?: boolean;
 }
 export const defaultRange = {
-  start: addDays(new Date(), -7),
+  start: addDays(new Date(), -30),
   end: addDays(new Date(), 0),
 };
 
@@ -76,7 +76,7 @@ export default function DashboardPage() {
     router.query.interval,
   )
     ? router.query.interval
-    : "7d";
+    : "30d";
 
   const {
     data: overview,

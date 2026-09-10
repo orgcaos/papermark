@@ -29,13 +29,13 @@ export function EmailUpdated({
         <Body className="mx-auto my-auto bg-white font-sans">
           <Container className="mx-auto my-10 w-[465px] p-5">
             <Text className="mx-0 mb-8 mt-4 p-0 text-center text-2xl font-normal">
-              <span className="font-bold tracking-tighter">Papermark</span>
+              <span className="font-bold tracking-tighter">Orgcaos Docket</span>
             </Text>
             <Text className="mx-0 my-7 p-0 text-center text-xl font-semibold text-black">
               Your email address has been changed
             </Text>
             <Text className="text-sm leading-6 text-black">
-              The email address for your Papermark account has been changed from{" "}
+              The email address for your Orgcaos Docket account has been changed from{" "}
               <strong>{oldEmail}</strong> to <strong>{newEmail}</strong>.
             </Text>
             <Text className="text-sm leading-6 text-black">

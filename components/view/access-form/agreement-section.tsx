@@ -197,7 +197,7 @@ export default function AgreementSection({
   const isChecked = !!data.hasConfirmedAgreement;
   const protectedLinkLabel = hideFooterOnAccessForm
     ? "protected link"
-    : "protected Papermark link";
+    : "protected Orgcaos Docket link";
   const visitorEmail = typeof data.email === "string" ? data.email.trim() : "";
   const visitorName = typeof data.name === "string" ? data.name.trim() : "";
   const currentSigningIdentity = `${visitorEmail}\n${visitorName}`;

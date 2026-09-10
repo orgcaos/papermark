@@ -294,13 +294,13 @@ export default function AccessForm({
                     "This document is securely shared with you using",
                   )}{" "}
               <a
-                href="https://www.papermark.com"
+                href="https://view.orgcaos.com"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-medium"
                 style={{ color: accessFormTheme.mutedTextColor }}
               >
-                {t("footer.papermark", "Papermark")}
+                {t("footer.papermark", "Orgcaos Docket")}
               </a>
               .
             </p>

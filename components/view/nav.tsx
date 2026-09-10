@@ -156,12 +156,12 @@ export default function Nav({
       case "papermark":
         return (
           <Link
-            href={`https://www.papermark.com?utm_campaign=navbar&utm_medium=navbar&utm_source=papermark-${linkId}`}
+            href="https://view.orgcaos.com"
             target="_blank"
             className="text-2xl font-bold tracking-tighter"
             style={{ color: navColorPalette.textColor }}
           >
-            Papermark
+            Orgcaos Docket
           </Link>
         );
       case "none":

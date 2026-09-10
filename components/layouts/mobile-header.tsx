@@ -56,7 +56,7 @@ export function MobileHeader() {
             href="/dashboard"
             className="text-xl font-bold tracking-tighter text-foreground"
           >
-            Papermark
+            Orgcaos Docket
           </Link>
         )}
 

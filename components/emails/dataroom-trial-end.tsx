@@ -29,7 +29,7 @@ const DataroomTrialEnd = ({ name }: DataroomTrialEnd) => {
         <Body className="mx-auto my-auto bg-white font-sans">
           <Container className="mx-auto my-10 w-[465px] p-5">
             <Text className="mb-8 mt-4 text-center text-2xl font-normal">
-              <span className="font-bold tracking-tighter">Papermark</span>
+              <span className="font-bold tracking-tighter">Orgcaos Docket</span>
             </Text>
             <Text className="mb-8 mt-4 text-center text-xl">
               Your Data Room Plus plan trial has expired

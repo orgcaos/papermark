@@ -324,7 +324,7 @@ export default function LinkPreview({
             {domain || linkName || "External Link"}
           </h2>
           <p className="max-w-md text-sm text-gray-500 dark:text-gray-400">
-            You&apos;re leaving Papermark. If you trust this link, click to
+            You&apos;re leaving Orgcaos Docket. If you trust this link, click to
             continue.
           </p>
           {linkUrl ? (

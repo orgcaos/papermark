@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 
 import { useEffect, useState } from "react";
 
-import { useTeam } from "@/context/team-context";
 import { PlanEnum } from "@/ee/stripe/constants";
 import {
   BrushIcon,
@@ -17,15 +16,10 @@ import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 import { useSelfMembership } from "@/lib/hooks/use-self-membership";
 import { usePlan } from "@/lib/swr/use-billing";
 import useLimits from "@/lib/swr/use-limits";
-import { useSlackIntegration } from "@/lib/swr/use-slack-integration";
-import { Team } from "@/lib/types";
 import { cn, nFormatter } from "@/lib/utils";
 
 import { UpgradePlanModal } from "@/components/billing/upgrade-plan-modal";
 import { Progress } from "@/components/ui/progress";
-
-import { SlackIcon } from "../shared/icons/slack-icon";
-import { MobileTeamSwitcher } from "./mobile-team-switcher";
 
 interface MobileMoreMenuProps {
   open: boolean;
@@ -34,25 +28,14 @@ interface MobileMoreMenuProps {
 
 export function MobileMoreMenu({ open, onClose }: MobileMoreMenuProps) {
   const router = useRouter();
-  const { currentTeam, teams, setCurrentTeam } = useTeam() || {};
   const { isFree, isTrial } = usePlan();
   const { limits } = useLimits();
   const { isAdmin } = useIsAdmin();
   // Scoped members can't reach team-wide areas (visitors, branding, settings).
   const { isDataroomMember } = useSelfMembership();
-  const { integration: slackIntegration } = useSlackIntegration({
-    enabled: !!currentTeam?.id,
-  });
   const [settingsExpanded, setSettingsExpanded] = useState(() =>
     router.pathname.includes("settings"),
   );
-
-  const switchTeam = (team: Pick<Team, "id" | "name">) => {
-    const target = teams?.find((t) => t.id === team.id);
-    if (!target || target.id === currentTeam?.id) return;
-    setCurrentTeam?.(target);
-    onClose();
-  };
 
   useEffect(() => {
     if (open) {
@@ -73,12 +56,8 @@ export function MobileMoreMenu({ open, onClose }: MobileMoreMenuProps) {
   const settingsSubItems = [
     { label: "General", href: "/settings/general" },
     { label: "Team", href: "/settings/people" },
-    { label: "Domains", href: "/settings/domains" },
     { label: "Notifications", href: "/settings/notifications" },
-    { label: "Webhooks", href: "/settings/webhooks" },
-    { label: "Slack", href: "/settings/slack" },
     ...(isAdmin ? [{ label: "Security", href: "/settings/security" }] : []),
-    { label: "Billing", href: "/settings/billing" },
   ];
 
   return (
@@ -95,14 +74,6 @@ export function MobileMoreMenu({ open, onClose }: MobileMoreMenuProps) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4">
-        {currentTeam && teams && teams.length > 0 && (
-          <MobileTeamSwitcher
-            currentTeam={currentTeam}
-            teams={teams}
-            onSwitch={switchTeam}
-          />
-        )}
-
         <div className="space-y-1">
           {!isDataroomMember && (
             <>
@@ -190,16 +161,6 @@ export function MobileMoreMenu({ open, onClose }: MobileMoreMenuProps) {
                 )}
               </div>
 
-              {!slackIntegration && (
-                <Link
-                  href="/settings/slack"
-                  onClick={onClose}
-                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <SlackIcon className="h-5 w-5" />
-                  Connect Slack
-                </Link>
-              )}
             </>
           )}
         </div>

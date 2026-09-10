@@ -52,7 +52,7 @@ export default function DownloadReady({
         <Body className="mx-auto my-auto bg-white font-sans">
           <Container className="mx-auto my-10 w-[465px] p-5">
             <Text className="mx-0 mb-8 mt-4 p-0 text-center text-2xl font-normal">
-              <span className="font-bold tracking-tighter">Papermark</span>
+              <span className="font-bold tracking-tighter">Orgcaos Docket</span>
             </Text>
             <Text className="text-sm leading-6 text-black">
               Your download of <strong>{dataroomName}</strong> is ready!
@@ -60,7 +60,7 @@ export default function DownloadReady({
             <Text className="text-sm leading-6 text-black">
               {isViewer
                 ? "Click the button below to open your downloads page and get your files."
-                : "Click the button below to download your files. You'll need to be logged in to your Papermark account to access the download."}
+                : "Click the button below to download your files. You'll need to be logged in to your Orgcaos Docket account to access the download."}
             </Text>
 
             <Section className="my-8 text-center">
@@ -87,7 +87,7 @@ export default function DownloadReady({
             <Text className="text-sm leading-6 text-black">
               Best,
               <br />
-              The Papermark Team
+              The Orgcaos Docket Team
             </Text>
             <Footer
               footerText={
