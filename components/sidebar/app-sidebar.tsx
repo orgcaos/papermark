@@ -26,7 +26,6 @@ import { useSelfMembership } from "@/lib/hooks/use-self-membership";
 import { usePlan } from "@/lib/swr/use-billing";
 import useDataroomsSimple from "@/lib/swr/use-datarooms-simple";
 import useLimits from "@/lib/swr/use-limits";
-import { useSlackIntegration } from "@/lib/swr/use-slack-integration";
 import { nFormatter } from "@/lib/utils";
 
 import { NavMain } from "@/components/sidebar/nav-main";
@@ -42,12 +41,10 @@ import {
 
 import ProBanner from "../billing/pro-banner";
 import { Progress } from "../ui/progress";
-import SlackBanner from "./banners/slack-banner";
 
 export function AppSidebarContent() {
   const router = useRouter();
   const [showProBanner, setShowProBanner] = useState<boolean | null>(null);
-  const [showSlackBanner, setShowSlackBanner] = useState<boolean | null>(null);
   const { currentTeam, teams, setCurrentTeam, isLoading }: TeamContextType =
     useTeam() || initialState;
   const { isBusiness, isDatarooms, isDataroomsPlus, isFree, isTrial } =
@@ -56,11 +53,6 @@ export function AppSidebarContent() {
   const { limits } = useLimits();
   const linksLimit = limits?.links;
   const documentsLimit = limits?.documents;
-
-  // Check Slack integration status
-  const { integration: slackIntegration } = useSlackIntegration({
-    enabled: !!currentTeam?.id,
-  });
 
   // Check feature flags
   const { features } = useFeatureFlags();
@@ -80,11 +72,6 @@ export function AppSidebarContent() {
       setShowProBanner(true);
     } else {
       setShowProBanner(false);
-    }
-    if (Cookies.get("hideSlackBanner") !== "slack-banner") {
-      setShowSlackBanner(true);
-    } else {
-      setShowSlackBanner(false);
     }
   }, []);
 
@@ -182,29 +169,9 @@ export function AppSidebarContent() {
             current: router.pathname.includes("settings/people"),
           },
           {
-            title: "Domains",
-            url: "/settings/domains",
-            current: router.pathname.includes("settings/domains"),
-          },
-          {
             title: "Notifications",
             url: "/settings/notifications",
             current: router.pathname.includes("settings/notifications"),
-          },
-          {
-            title: "Slack",
-            url: "/settings/slack",
-            current: router.pathname.includes("settings/slack"),
-          },
-          {
-            title: "Webhooks",
-            url: "/settings/webhooks",
-            current: router.pathname.includes("settings/webhooks"),
-          },
-          {
-            title: "API Keys",
-            url: "/settings/tokens",
-            current: router.pathname.includes("settings/tokens"),
           },
           ...(isAdmin
             ? [
@@ -215,11 +182,6 @@ export function AppSidebarContent() {
                 },
               ]
             : []),
-          {
-            title: "Billing",
-            url: "/settings/billing",
-            current: router.pathname.includes("settings/billing"),
-          },
         ],
       },
     ],
@@ -282,9 +244,6 @@ export function AppSidebarContent() {
         <SidebarMenu className="group-data-[collapsible=icon]:hidden">
           <SidebarMenuItem>
             <div>
-              {!slackIntegration && showSlackBanner ? (
-                <SlackBanner setShowSlackBanner={setShowSlackBanner} />
-              ) : null}
               {isFree && !isTrial && showProBanner ? (
                 <ProBanner setShowProBanner={setShowProBanner} />
               ) : null}
