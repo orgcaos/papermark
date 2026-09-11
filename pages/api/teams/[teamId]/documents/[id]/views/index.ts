@@ -11,7 +11,7 @@ import { isDataroomScopedRole } from "@/lib/api/rbac/permissions";
 import { LIMITS } from "@/lib/constants";
 import { errorhandler } from "@/lib/errorHandler";
 import prisma from "@/lib/prisma";
-import { getViewPageDuration } from "@/lib/tinybird";
+import { getPageDurationsBatch } from "@/lib/tinybird";
 import { getVideoEventsByDocument } from "@/lib/tinybird/pipes";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
@@ -117,33 +117,41 @@ async function getVideoViews(
 }
 
 async function getDocumentViews(views: ViewWithExtras[], document: Document) {
-  const durationsPromises = views.map((view) => {
-    return getViewPageDuration({
-      documentId: document.id,
-      viewId: view.id,
+  // One batched Tinybird query for every view on this page, instead of one
+  // query per view -- see getPageDurationsBatch's comment in lib/tinybird/pipes.ts.
+  const pageRowsByViewId = new Map<
+    string,
+    { pageNumber: number; sum_duration: number }[]
+  >();
+  if (views.length > 0) {
+    const pageData = await getPageDurationsBatch({
+      viewIds: views.map((view) => view.id).join(","),
       since: 0,
     });
-  });
+    for (const row of pageData.data ?? []) {
+      const rows = pageRowsByViewId.get(row.viewId) ?? [];
+      rows.push({ pageNumber: row.pageNumber, sum_duration: row.sum_duration });
+      pageRowsByViewId.set(row.viewId, rows);
+    }
+  }
 
-  const durations = await Promise.all(durationsPromises);
-
-  return views.map((view, index) => {
+  return views.map((view) => {
     const relevantDocumentVersion = document.versions.find(
       (version) => version.createdAt <= view.viewedAt,
     );
 
     const numPages =
       relevantDocumentVersion?.numPages || document.numPages || 0;
+    const pageRows = pageRowsByViewId.get(view.id) ?? [];
     const completionRate = numPages
-      ? (durations[index].data.length / numPages) * 100
+      ? (pageRows.length / numPages) * 100
       : 0;
 
     return {
       ...view,
-      duration: durations[index],
-      totalDuration: durations[index].data.reduce(
-        (total: number, data: { sum_duration: number }) =>
-          total + data.sum_duration,
+      duration: { data: pageRows },
+      totalDuration: pageRows.reduce(
+        (total, data) => total + data.sum_duration,
         0,
       ),
       completionRate: completionRate.toFixed(),

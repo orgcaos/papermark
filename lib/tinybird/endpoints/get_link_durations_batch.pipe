@@ -1,0 +1,18 @@
+VERSION 1
+
+NODE endpoint
+SQL >
+    %
+    SELECT
+        linkId,
+        SUM(duration) AS sum_duration,
+        COUNT(distinct viewId) as view_count
+    FROM
+        page_views
+    WHERE
+        linkId IN splitByChar(',', {{ String(linkIds, required=true) }})
+        AND time >= {{ Int64(since, required=true) }}
+    GROUP BY
+        linkId
+
+TYPE ENDPOINT

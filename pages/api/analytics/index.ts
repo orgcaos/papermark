@@ -7,10 +7,10 @@ import { z } from "zod";
 import { enforceDataroomMemberScope } from "@/lib/api/rbac/guard";
 import prisma from "@/lib/prisma";
 import {
-  getTotalDocumentDuration,
-  getTotalLinkDuration,
-  getTotalViewerDuration,
-  getViewPageDuration,
+  getDocumentDurationsBatch,
+  getLinkDurationsBatch,
+  getPageDurationsBatch,
+  getViewDurationsBatch,
 } from "@/lib/tinybird/pipes";
 import { CustomUser } from "@/lib/types";
 import { durationFormat } from "@/lib/utils";
@@ -322,48 +322,50 @@ export default async function handler(
           },
         });
 
-        // Transform the data to match the table requirements
-        const transformedLinks = await Promise.all(
-          links.map(async (link) => {
-            let avgDuration = "0s";
-
-            if (link.documentId) {
-              try {
-                const durationData = await getTotalLinkDuration({
-                  linkId: link.id,
-                  documentId: link.documentId,
-                  excludedViewIds: "", // Include all views
-                  since,
-                  until: endStr
-                    ? new Date(endStr).getTime()
-                    : new Date().getTime(),
-                });
-
-                if (durationData.data && durationData.data[0]) {
-                  const totalDuration = durationData.data[0].sum_duration;
-                  const viewCount = durationData.data[0].view_count;
-                  const avgDurationMs = totalDuration / viewCount;
-                  avgDuration = durationFormat(avgDurationMs);
-                }
-              } catch (error) {
-                console.error("Error fetching Tinybird data:", error);
-              }
+        // One batched Tinybird query for every link's duration, instead of
+        // one query per link -- see getLinkDurationsBatch's comment.
+        const linkIdsWithDoc = links
+          .filter((link) => link.documentId)
+          .map((link) => link.id);
+        const linkDurationById = new Map<
+          string,
+          { sum_duration: number; view_count: number }
+        >();
+        if (linkIdsWithDoc.length > 0) {
+          try {
+            const durationData = await getLinkDurationsBatch({
+              linkIds: linkIdsWithDoc.join(","),
+              since,
+            });
+            for (const row of durationData.data ?? []) {
+              linkDurationById.set(row.linkId, row);
             }
+          } catch (error) {
+            console.error("Error fetching Tinybird data:", error);
+          }
+        }
 
-            return {
-              id: link.id,
-              name: link.name || `Link #${link.id.slice(-5)}`,
-              url: link.domainId
-                ? `https://${link.domainSlug}/${link.slug}`
-                : `${process.env.NEXT_PUBLIC_MARKETING_URL}/view/${link.id}`,
-              documentName: link.document?.name || "Unknown",
-              documentId: link.documentId,
-              views: link._count.views,
-              avgDuration,
-              lastViewed: link.views[0]?.viewedAt || null,
-            };
-          }),
-        );
+        // Transform the data to match the table requirements
+        const transformedLinks = links.map((link) => {
+          let avgDuration = "0s";
+          const row = linkDurationById.get(link.id);
+          if (row && row.view_count > 0) {
+            avgDuration = durationFormat(row.sum_duration / row.view_count);
+          }
+
+          return {
+            id: link.id,
+            name: link.name || `Link #${link.id.slice(-5)}`,
+            url: link.domainId
+              ? `https://${link.domainSlug}/${link.slug}`
+              : `${process.env.NEXT_PUBLIC_MARKETING_URL}/view/${link.id}`,
+            documentName: link.document?.name || "Unknown",
+            documentId: link.documentId,
+            views: link._count.views,
+            avgDuration,
+            lastViewed: link.views[0]?.viewedAt || null,
+          };
+        });
 
         return res.status(200).json(transformedLinks);
       }
@@ -414,39 +416,40 @@ export default async function handler(
           },
         });
 
-        // Transform the data to match the table requirements
-        const transformedDocuments = await Promise.all(
-          documents.map(async (doc) => {
-            let avgDuration = "0s";
-            try {
-              const durationData = await getTotalDocumentDuration({
-                documentId: doc.id,
-                excludedLinkIds: "", // Include all links
-                excludedViewIds: "", // Include all views
-                since,
-                until: endStr
-                  ? new Date(endStr).getTime()
-                  : new Date().getTime(),
-              });
-
-              if (durationData.data && durationData.data[0]) {
-                const totalDuration = durationData.data[0].sum_duration;
-                const avgDurationMs = totalDuration / doc._count.views;
-                avgDuration = durationFormat(avgDurationMs);
-              }
-            } catch (error) {
-              console.error("Error fetching Tinybird data:", error);
+        // One batched Tinybird query for every document's duration,
+        // instead of one query per document -- see
+        // getDocumentDurationsBatch's comment.
+        const documentDurationById = new Map<string, number>();
+        if (documents.length > 0) {
+          try {
+            const durationData = await getDocumentDurationsBatch({
+              documentIds: documents.map((doc) => doc.id).join(","),
+              since,
+            });
+            for (const row of durationData.data ?? []) {
+              documentDurationById.set(row.documentId, row.sum_duration);
             }
+          } catch (error) {
+            console.error("Error fetching Tinybird data:", error);
+          }
+        }
 
-            return {
-              id: doc.id,
-              name: doc.name,
-              views: doc._count.views,
-              avgDuration,
-              lastViewed: doc.views[0]?.viewedAt || null,
-            };
-          }),
-        );
+        // Transform the data to match the table requirements
+        const transformedDocuments = documents.map((doc) => {
+          let avgDuration = "0s";
+          const totalDuration = documentDurationById.get(doc.id);
+          if (totalDuration !== undefined && doc._count.views > 0) {
+            avgDuration = durationFormat(totalDuration / doc._count.views);
+          }
+
+          return {
+            id: doc.id,
+            name: doc.name,
+            views: doc._count.views,
+            avgDuration,
+            lastViewed: doc.views[0]?.viewedAt || null,
+          };
+        });
 
         return res.status(200).json(transformedDocuments);
       }
@@ -503,49 +506,54 @@ export default async function handler(
             })
           : 0;
 
-        // Transform the data to match the table requirements
-        const transformedVisitors = await Promise.all(
-          viewers.map(async (viewer) => {
-            // Get unique documents viewed
-            const uniqueDocuments = new Set(
-              viewer.views.map((view) => view.documentId),
-            );
-
-            let totalDuration = 0;
-            try {
-              const viewIds = viewer.views.map((view) => view.id).join(",");
-              const durationData = await getTotalViewerDuration({
-                viewIds,
-                since,
-                until: endStr
-                  ? new Date(endStr).getTime()
-                  : new Date().getTime(),
-              });
-
-              if (durationData.data && durationData.data[0]) {
-                totalDuration = durationData.data[0].sum_duration;
-              }
-            } catch (error) {
-              console.error("Error fetching Tinybird data:", error);
-            }
-
-            // Get the name from the most recent view that has a name
-            const viewerName = viewer.views.find(
-              (v) => v.viewerName,
-            )?.viewerName;
-
-            return {
-              email: viewer.email,
-              viewerId: viewer.id,
-              totalViews: viewer.views.length,
-              lastActive: viewer.views[0]?.viewedAt || new Date(),
-              uniqueDocuments: uniqueDocuments.size,
-              verified: viewer.verified,
-              totalDuration,
-              viewerName: viewerName || null,
-            };
-          }),
+        // One batched Tinybird query for every viewer's views, instead of
+        // one query per viewer -- see getViewDurationsBatch's comment.
+        const allViewIds = viewers.flatMap((viewer) =>
+          viewer.views.map((view) => view.id),
         );
+        const viewDurationByViewId = new Map<string, number>();
+        if (allViewIds.length > 0) {
+          try {
+            const durationData = await getViewDurationsBatch({
+              viewIds: allViewIds.join(","),
+              since,
+            });
+            for (const row of durationData.data ?? []) {
+              viewDurationByViewId.set(row.viewId, row.sum_duration);
+            }
+          } catch (error) {
+            console.error("Error fetching Tinybird data:", error);
+          }
+        }
+
+        // Transform the data to match the table requirements
+        const transformedVisitors = viewers.map((viewer) => {
+          // Get unique documents viewed
+          const uniqueDocuments = new Set(
+            viewer.views.map((view) => view.documentId),
+          );
+
+          const totalDuration = viewer.views.reduce(
+            (sum, view) => sum + (viewDurationByViewId.get(view.id) ?? 0),
+            0,
+          );
+
+          // Get the name from the most recent view that has a name
+          const viewerName = viewer.views.find(
+            (v) => v.viewerName,
+          )?.viewerName;
+
+          return {
+            email: viewer.email,
+            viewerId: viewer.id,
+            totalViews: viewer.views.length,
+            lastActive: viewer.views[0]?.viewedAt || new Date(),
+            uniqueDocuments: uniqueDocuments.size,
+            verified: viewer.verified,
+            totalDuration,
+            viewerName: viewerName || null,
+          };
+        });
 
         return res.status(200).json({
           visitors: transformedVisitors,
@@ -616,57 +624,70 @@ export default async function handler(
             })
           : 0;
 
-        // Transform the data to match the table requirements
-        const transformedViews = await Promise.all(
-          views.map(async (view) => {
-            let totalDuration = 0;
-            let completionRate = 0;
-
-            if (view.document?.id) {
-              try {
-                const pageData = await getViewPageDuration({
-                  documentId: view.document.id,
-                  viewId: view.id,
-                  since,
-                  until: endStr
-                    ? new Date(endStr).getTime()
-                    : new Date().getTime(),
-                });
-
-                if (pageData.data && pageData.data.length > 0) {
-                  // Calculate total duration from all pages
-                  totalDuration = pageData.data.reduce(
-                    (sum, page) => sum + page.sum_duration,
-                    0,
-                  );
-
-                  // Calculate completion rate based on pages with any duration
-                  const numPages = view.document.versions[0]?.numPages || 0;
-                  completionRate = numPages
-                    ? (pageData.data.length / numPages) * 100
-                    : 0;
-                }
-              } catch (error) {
-                console.error("Error fetching Tinybird data:", error);
-              }
+        // One batched Tinybird query for every view's per-page durations,
+        // instead of one query per view -- see getPageDurationsBatch's
+        // comment. Group the flat viewId+pageNumber rows back per view.
+        const viewIdsWithDoc = views
+          .filter((view) => view.document?.id)
+          .map((view) => view.id);
+        const pageRowsByViewId = new Map<
+          string,
+          { pageNumber: number; sum_duration: number }[]
+        >();
+        if (viewIdsWithDoc.length > 0) {
+          try {
+            const pageData = await getPageDurationsBatch({
+              viewIds: viewIdsWithDoc.join(","),
+              since,
+            });
+            for (const row of pageData.data ?? []) {
+              const rows = pageRowsByViewId.get(row.viewId) ?? [];
+              rows.push({
+                pageNumber: row.pageNumber,
+                sum_duration: row.sum_duration,
+              });
+              pageRowsByViewId.set(row.viewId, rows);
             }
+          } catch (error) {
+            console.error("Error fetching Tinybird data:", error);
+          }
+        }
 
-            return {
-              id: view.id,
-              viewerEmail: view.viewerEmail,
-              documentName:
-                view.document?.name ||
-                `Document #${view.document?.id.slice(-5)}`,
-              linkName: view.link?.name || `Link #${view.link?.id.slice(-5)}`,
-              viewedAt: view.viewedAt,
-              totalDuration,
-              completionRate: Math.round(completionRate),
-              verified: view.verified || false,
-              documentId: view.document?.id,
-              teamId,
-            };
-          }),
-        );
+        // Transform the data to match the table requirements
+        const transformedViews = views.map((view) => {
+          let totalDuration = 0;
+          let completionRate = 0;
+
+          const pageRows = pageRowsByViewId.get(view.id);
+          if (view.document?.id && pageRows && pageRows.length > 0) {
+            // Calculate total duration from all pages
+            totalDuration = pageRows.reduce(
+              (sum, page) => sum + page.sum_duration,
+              0,
+            );
+
+            // Calculate completion rate based on pages with any duration
+            const numPages = view.document.versions[0]?.numPages || 0;
+            completionRate = numPages
+              ? (pageRows.length / numPages) * 100
+              : 0;
+          }
+
+          return {
+            id: view.id,
+            viewerEmail: view.viewerEmail,
+            documentName:
+              view.document?.name ||
+              `Document #${view.document?.id.slice(-5)}`,
+            linkName: view.link?.name || `Link #${view.link?.id.slice(-5)}`,
+            viewedAt: view.viewedAt,
+            totalDuration,
+            completionRate: Math.round(completionRate),
+            verified: view.verified || false,
+            documentId: view.document?.id,
+            teamId,
+          };
+        });
 
         return res.status(200).json({
           views: transformedViews,

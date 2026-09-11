@@ -101,6 +101,63 @@ export const getTotalViewerDuration = tb.buildPipe({
   }),
 });
 
+// Batched variants of the four pipes above, used by the team-wide dashboard
+// tabs (Links/Documents/Visitors/Views) and the per-document views list,
+// which otherwise fired one Tinybird query per row -- easily burning through
+// the daily query quota on a page with more than a handful of rows. Each of
+// these takes a comma-separated list of IDs and returns one row per ID
+// (or, for get_page_durations_batch, one row per viewId+pageNumber) via a
+// single GROUP BY query instead of N separate calls.
+export const getLinkDurationsBatch = tb.buildPipe({
+  pipe: "get_link_durations_batch",
+  parameters: z.object({
+    linkIds: z.string().describe("Comma separated linkIds"),
+    since: z.number(),
+  }),
+  data: z.object({
+    linkId: z.string(),
+    sum_duration: z.number(),
+    view_count: z.number(),
+  }),
+});
+
+export const getDocumentDurationsBatch = tb.buildPipe({
+  pipe: "get_document_durations_batch",
+  parameters: z.object({
+    documentIds: z.string().describe("Comma separated documentIds"),
+    since: z.number(),
+  }),
+  data: z.object({
+    documentId: z.string(),
+    sum_duration: z.number(),
+  }),
+});
+
+export const getViewDurationsBatch = tb.buildPipe({
+  pipe: "get_view_durations_batch",
+  parameters: z.object({
+    viewIds: z.string().describe("Comma separated viewIds"),
+    since: z.number(),
+  }),
+  data: z.object({
+    viewId: z.string(),
+    sum_duration: z.number(),
+  }),
+});
+
+export const getPageDurationsBatch = tb.buildPipe({
+  pipe: "get_page_durations_batch",
+  parameters: z.object({
+    viewIds: z.string().describe("Comma separated viewIds"),
+    since: z.number(),
+  }),
+  data: z.object({
+    viewId: z.string(),
+    pageNumber: z.number(),
+    sum_duration: z.number(),
+  }),
+});
+
 export const getViewUserAgent_v2 = tb.buildPipe({
   pipe: "get_useragent_per_view",
   parameters: z.object({

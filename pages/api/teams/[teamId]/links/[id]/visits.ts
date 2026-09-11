@@ -6,7 +6,7 @@ import { LIMITS } from "@/lib/constants";
 import { errorhandler } from "@/lib/errorHandler";
 import prisma from "@/lib/prisma";
 import { getDocumentWithTeamAndUser } from "@/lib/team/helper";
-import { getViewPageDuration, getVideoEventsByDocument } from "@/lib/tinybird";
+import { getPageDurationsBatch, getVideoEventsByDocument } from "@/lib/tinybird";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
 import {
@@ -210,31 +210,41 @@ export default async function handle(
           };
         });
       } else {
-        const durations = await Promise.all(
-          limitedViews.map((view) =>
-            getViewPageDuration({
-              documentId: view.documentId!,
-              viewId: view.id,
-              since: 0,
-            }),
-          ),
-        );
+        // One batched Tinybird query for every view on this link, instead of
+        // one query per view -- see getPageDurationsBatch's comment in
+        // lib/tinybird/pipes.ts.
+        const pageRowsByViewId = new Map<
+          string,
+          { pageNumber: number; sum_duration: number }[]
+        >();
+        if (limitedViews.length > 0) {
+          const pageData = await getPageDurationsBatch({
+            viewIds: limitedViews.map((view) => view.id).join(","),
+            since: 0,
+          });
+          for (const row of pageData.data ?? []) {
+            const rows = pageRowsByViewId.get(row.viewId) ?? [];
+            rows.push({ pageNumber: row.pageNumber, sum_duration: row.sum_duration });
+            pageRowsByViewId.set(row.viewId, rows);
+          }
+        }
 
-        viewsWithDuration = limitedViews.map((view, index) => {
+        viewsWithDuration = limitedViews.map((view) => {
           const viewNumPages = view.documentId
             ? (numPagesByDocumentId.get(view.documentId) ?? currentDocNumPages)
             : currentDocNumPages;
+          const pageRows = pageRowsByViewId.get(view.id) ?? [];
           const viewCompletion = viewNumPages
-            ? (durations[index].data.length / viewNumPages) * 100
+            ? (pageRows.length / viewNumPages) * 100
             : 0;
-          const totalDuration = durations[index].data.reduce(
+          const totalDuration = pageRows.reduce(
             (sum, data) => sum + data.sum_duration,
             0,
           );
 
           return {
             ...view,
-            duration: durations[index],
+            duration: { data: pageRows },
             totalDuration,
             completionRate: viewCompletion.toFixed(),
           };
