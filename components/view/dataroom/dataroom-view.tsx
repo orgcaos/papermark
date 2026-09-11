@@ -351,7 +351,7 @@ export default function DataroomView({
             viewData={viewData}
             isEmbedded={isEmbedded}
             dataroomIndexEnabled={dataroomIndexEnabled}
-            showPoweredByBanner={link.showBanner ?? false}
+            showPoweredByBanner={false}
             viewerEmail={
               viewData.viewerEmail ??
               data.email ??

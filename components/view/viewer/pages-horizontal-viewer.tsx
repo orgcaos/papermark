@@ -150,6 +150,9 @@ export default function PagesHorizontalViewer({
   const mobileViewportRef = useRef<HTMLDivElement>(null);
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const imageRefs = useRef<(HTMLImageElement | null)[]>([]);
+  // Debounces wheel-driven page turns so one continuous trackpad/scroll
+  // gesture doesn't fire through several pages at once.
+  const wheelCooldownRef = useRef(false);
 
   const [imageDimensions, setImageDimensions] = useState<
     Record<number, { width: number; height: number }>
@@ -867,11 +870,43 @@ export default function PagesHorizontalViewer({
             >
               <div
                 ref={scrollContainerRef}
-                className="h-full w-full overflow-auto"
+                className="h-full w-full cursor-pointer overflow-auto"
                 // Let one-finger drags scroll/pan while our pinch handler
                 // owns two-finger zoom. Without this the browser's own
                 // pinch-zoom fights the scroll container on mobile.
                 style={isMobile ? { touchAction: "pan-x pan-y" } : undefined}
+                onClick={(e) => {
+                  // Clicking anywhere on the page advances to the next one,
+                  // like a slide deck - except an actual link/annotation
+                  // target, which should do its own thing instead.
+                  if ((e.target as HTMLElement).closest("a, area, button"))
+                    return;
+                  goToNextPage();
+                }}
+                onWheel={(e) => {
+                  // Only take over the scroll wheel at default zoom - once
+                  // zoomed in, wheel should pan around the page like normal
+                  // scrolling, not flip pages out from under the user.
+                  if (isMobile || scale > 1) return;
+                  if (wheelCooldownRef.current) return;
+
+                  const delta =
+                    Math.abs(e.deltaY) >= Math.abs(e.deltaX)
+                      ? e.deltaY
+                      : e.deltaX;
+                  if (Math.abs(delta) < 10) return; // ignore trackpad jitter
+
+                  e.preventDefault();
+                  wheelCooldownRef.current = true;
+                  if (delta > 0) {
+                    goToNextPage();
+                  } else {
+                    goToPreviousPage();
+                  }
+                  setTimeout(() => {
+                    wheelCooldownRef.current = false;
+                  }, 500);
+                }}
               >
                 {/* Sizer defines the scrollable layout size at current scale.
                       On mobile at default zoom we vertically center the page

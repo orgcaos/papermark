@@ -835,9 +835,19 @@ export default function PagesVerticalViewer({
                 !isWindowFocused &&
                   screenshotProtectionEnabled &&
                   "blur-xl transition-all duration-300",
+                !isMobile && "cursor-pointer",
               )}
               style={isMobile ? { touchAction: "pan-x pan-y" } : undefined}
               ref={containerRef}
+              onClick={(e) => {
+                // Desktop only: clicking anywhere on a page jumps to the next
+                // one, same as the hover chevrons - except an actual
+                // link/annotation target, which should do its own thing.
+                if (isMobile) return;
+                if ((e.target as HTMLElement).closest("a, area, button"))
+                  return;
+                goToNextPage();
+              }}
             >
               {/* Sizer: `margin: 0 auto` centers the content when it fits and
                   left-aligns it (scrollable from the left edge) once it grows

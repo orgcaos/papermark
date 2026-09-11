@@ -211,7 +211,9 @@ export const getStaticProps = async (context: GetStaticPropsContext) => {
             metaFavicon: publicMeta.metaFavicon,
             metaUrl: `https://${domain}/${slug}` || null,
           },
-          showAccountCreationSlide: link.showBanner || teamPlan === "free",
+          // Always off for this single-tenant deployment - see the same
+          // change in pages/view/[linkId]/index.tsx.
+          showAccountCreationSlide: false,
           useAdvancedExcelViewer: advancedExcelEnabled,
           hideFooterOnAccessForm: hideFooterOnAccessFormEnabled,
           logoOnAccessForm: logoOnAccessFormEnabled,
