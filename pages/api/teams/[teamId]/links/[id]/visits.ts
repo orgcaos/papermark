@@ -6,7 +6,11 @@ import { LIMITS } from "@/lib/constants";
 import { errorhandler } from "@/lib/errorHandler";
 import prisma from "@/lib/prisma";
 import { getDocumentWithTeamAndUser } from "@/lib/team/helper";
-import { getPageDurationsBatch, getVideoEventsByDocument } from "@/lib/tinybird";
+import {
+  getPageDurationsBatch,
+  getVideoEventsByDocument,
+  getViewPageDuration,
+} from "@/lib/tinybird";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
 import {
@@ -218,14 +222,42 @@ export default async function handle(
           { pageNumber: number; sum_duration: number }[]
         >();
         if (limitedViews.length > 0) {
-          const pageData = await getPageDurationsBatch({
-            viewIds: limitedViews.map((view) => view.id).join(","),
-            since: 0,
-          });
-          for (const row of pageData.data ?? []) {
-            const rows = pageRowsByViewId.get(row.viewId) ?? [];
-            rows.push({ pageNumber: row.pageNumber, sum_duration: row.sum_duration });
-            pageRowsByViewId.set(row.viewId, rows);
+          try {
+            const pageData = await getPageDurationsBatch({
+              viewIds: limitedViews.map((view) => view.id).join(","),
+              since: 0,
+            });
+            for (const row of pageData.data ?? []) {
+              const rows = pageRowsByViewId.get(row.viewId) ?? [];
+              rows.push({ pageNumber: row.pageNumber, sum_duration: row.sum_duration });
+              pageRowsByViewId.set(row.viewId, rows);
+            }
+          } catch (error) {
+            // The batched pipe (get_page_durations_batch) has to be pushed to
+            // Tinybird separately from a normal code deploy (`tb push`). If
+            // that was never done, or the pipe is temporarily unavailable,
+            // fall back to the original one-query-per-view lookup instead of
+            // failing the whole request.
+            console.error(
+              "[visits] getPageDurationsBatch failed, falling back to per-view lookups",
+              error,
+            );
+            const fallbackResults = await Promise.all(
+              limitedViews.map((view) =>
+                getViewPageDuration({
+                  documentId: view.documentId!,
+                  viewId: view.id,
+                  since: 0,
+                }),
+              ),
+            );
+            limitedViews.forEach((view, index) => {
+              const rows = (fallbackResults[index].data ?? []).map((d) => ({
+                pageNumber: Number(d.pageNumber),
+                sum_duration: d.sum_duration,
+              }));
+              pageRowsByViewId.set(view.id, rows);
+            });
           }
         }
 

@@ -142,7 +142,11 @@ export default function VisitorsTable({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
 
-  const { views, mutate: mutateViews } = useDocumentVisits(
+  const {
+    views,
+    error: viewsError,
+    mutate: mutateViews,
+  } = useDocumentVisits(
     currentPage,
     pageSize,
     documentId,
@@ -251,7 +255,7 @@ export default function VisitorsTable({
 
   // Optional sections (e.g. "other visits from document link") hide themselves
   // entirely while loading or when empty, so no empty header is shown.
-  if (hideWhenEmpty && (!views || hasNoViews)) {
+  if (hideWhenEmpty && (!views || hasNoViews) && !viewsError) {
     return null;
   }
 
@@ -277,7 +281,25 @@ export default function VisitorsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {views?.viewsWithDuration.length === 0 &&
+            {viewsError && (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <div className="flex h-40 w-full flex-col items-center justify-center gap-2 text-center">
+                    <p className="flex items-center gap-1.5 text-muted-foreground">
+                      <AlertTriangleIcon className="h-4 w-4 text-orange-500" />
+                      Couldn&apos;t load visitors right now.
+                    </p>
+                    <button
+                      className="text-sm underline hover:text-gray-800"
+                      onClick={() => mutateViews()}
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {!viewsError && views?.viewsWithDuration.length === 0 &&
               views?.hiddenViewCount === 0 && (
                 <TableRow>
                   <TableCell colSpan={5}>
@@ -761,7 +783,7 @@ export default function VisitorsTable({
                   </Collapsible>
                 );
               })
-            ) : (
+            ) : !viewsError ? (
               <TableRow>
                 <TableCell className="min-w-[100px]">
                   <Skeleton className="h-6 w-full" />
@@ -776,7 +798,7 @@ export default function VisitorsTable({
                   <Skeleton className="h-6 w-24" />
                 </TableCell>
               </TableRow>
-            )}
+            ) : null}
           </TableBody>
         </Table>
       </div>

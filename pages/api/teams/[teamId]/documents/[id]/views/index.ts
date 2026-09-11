@@ -11,7 +11,7 @@ import { isDataroomScopedRole } from "@/lib/api/rbac/permissions";
 import { LIMITS } from "@/lib/constants";
 import { errorhandler } from "@/lib/errorHandler";
 import prisma from "@/lib/prisma";
-import { getPageDurationsBatch } from "@/lib/tinybird";
+import { getPageDurationsBatch, getViewPageDuration } from "@/lib/tinybird";
 import { getVideoEventsByDocument } from "@/lib/tinybird/pipes";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
@@ -124,14 +124,43 @@ async function getDocumentViews(views: ViewWithExtras[], document: Document) {
     { pageNumber: number; sum_duration: number }[]
   >();
   if (views.length > 0) {
-    const pageData = await getPageDurationsBatch({
-      viewIds: views.map((view) => view.id).join(","),
-      since: 0,
-    });
-    for (const row of pageData.data ?? []) {
-      const rows = pageRowsByViewId.get(row.viewId) ?? [];
-      rows.push({ pageNumber: row.pageNumber, sum_duration: row.sum_duration });
-      pageRowsByViewId.set(row.viewId, rows);
+    try {
+      const pageData = await getPageDurationsBatch({
+        viewIds: views.map((view) => view.id).join(","),
+        since: 0,
+      });
+      for (const row of pageData.data ?? []) {
+        const rows = pageRowsByViewId.get(row.viewId) ?? [];
+        rows.push({ pageNumber: row.pageNumber, sum_duration: row.sum_duration });
+        pageRowsByViewId.set(row.viewId, rows);
+      }
+    } catch (error) {
+      // The batched pipe (get_page_durations_batch) has to be pushed to
+      // Tinybird separately from a normal code deploy (`tb push`). If that
+      // was never done, or the pipe is temporarily unavailable, fall back to
+      // the original one-query-per-view lookup instead of failing the whole
+      // request -- better to burn a few extra Tinybird queries than to have
+      // the visitor list never load.
+      console.error(
+        "[views] getPageDurationsBatch failed, falling back to per-view lookups",
+        error,
+      );
+      const fallbackResults = await Promise.all(
+        views.map((view) =>
+          getViewPageDuration({
+            documentId: document.id,
+            viewId: view.id,
+            since: 0,
+          }),
+        ),
+      );
+      views.forEach((view, index) => {
+        const rows = (fallbackResults[index].data ?? []).map((d) => ({
+          pageNumber: Number(d.pageNumber),
+          sum_duration: d.sum_duration,
+        }));
+        pageRowsByViewId.set(view.id, rows);
+      });
     }
   }
 
