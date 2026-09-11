@@ -54,8 +54,6 @@ export function MobileMoreMenu({ open, onClose }: MobileMoreMenuProps) {
   const documentsLimit = limits?.documents;
 
   const settingsSubItems = [
-    { label: "General", href: "/settings/general" },
-    { label: "Team", href: "/settings/people" },
     { label: "Notifications", href: "/settings/notifications" },
     ...(isAdmin ? [{ label: "Security", href: "/settings/security" }] : []),
   ];

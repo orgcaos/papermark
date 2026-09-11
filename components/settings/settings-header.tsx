@@ -23,16 +23,6 @@ export function SettingsHeader() {
       <NavMenu
         navigation={[
           {
-            label: "Overview",
-            href: `/settings/general`,
-            segment: `general`,
-          },
-          {
-            label: "Team",
-            href: `/settings/people`,
-            segment: "people",
-          },
-          {
             label: "Domains",
             href: `/settings/domains`,
             segment: "domains",
@@ -58,11 +48,6 @@ export function SettingsHeader() {
             segment: "notifications",
           },
           {
-            label: "Slack",
-            href: `/settings/slack`,
-            segment: "slack",
-          },
-          {
             label: "AI",
             href: `/settings/ai`,
             segment: "ai",
@@ -83,11 +68,6 @@ export function SettingsHeader() {
             href: `/settings/security`,
             segment: "security",
             disabled: !isAdmin,
-          },
-          {
-            label: "Billing",
-            href: `/settings/billing`,
-            segment: "billing",
           },
         ]}
       />

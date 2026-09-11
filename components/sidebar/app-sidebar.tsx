@@ -104,7 +104,7 @@ export function AppSidebarContent() {
       },
       {
         title: "General Settings",
-        url: "/settings/general",
+        url: "/settings/notifications",
         icon: CogIcon,
         isActive:
           router.pathname.includes("settings") &&
@@ -112,16 +112,6 @@ export function AppSidebarContent() {
           !router.pathname.includes("datarooms") &&
           !router.pathname.includes("documents"),
         items: [
-          {
-            title: "General",
-            url: "/settings/general",
-            current: router.pathname.includes("settings/general"),
-          },
-          {
-            title: "Team",
-            url: "/settings/people",
-            current: router.pathname.includes("settings/people"),
-          },
           {
             title: "Notifications",
             url: "/settings/notifications",
