@@ -7,7 +7,7 @@ import { errorhandler } from "@/lib/errorHandler";
 import { getVisitors } from "@/lib/api/visitors/get-visitors";
 import prisma from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import { getDocumentDurationPerViewer } from "@/lib/tinybird";
+import { getViewDurationsBatch } from "@/lib/tinybird";
 import { CustomUser } from "@/lib/types";
 import { Prisma } from "@prisma/client";
 
@@ -23,34 +23,35 @@ async function fetchAndCacheDurations(
   if (cachedDurations) {
     const parsedDurations = typeof cachedDurations === 'string' ? JSON.parse(cachedDurations) : cachedDurations;
     durationsMap = parsedDurations;
-  } else {
-    const batchSize = 10; 
-    for (let i = 0; i < groupedViews.length; i += batchSize) {
-      const batch = groupedViews.slice(i, i + batchSize);
+  } else if (groupedViews.length > 0) {
+    // Single batched Tinybird call for every view across every document this
+    // viewer has ever opened, instead of one call per document (previously
+    // batched 10-at-a-time via getDocumentDurationPerViewer, but still N
+    // round trips for a viewer with many documents — this was the last
+    // un-batched N+1 spot left over from the earlier Tinybird quota fix).
+    const allViewIds = groupedViews.flatMap((view) => view.viewIds);
 
-      const batchPromises = batch.map(async (view) => {
-        try {
-          const durationResult = await getDocumentDurationPerViewer({
-            documentId: view.documentId,
-            viewIds: view.viewIds.join(","),
-          });
-          return {
-            documentId: view.documentId,
-            totalDuration: durationResult.data[0]?.sum_duration || 0,
-          };
-        } catch (error) {
-          console.error(`Error fetching duration for document ${view.documentId}:`, error);
-          return {
-            documentId: view.documentId,
-            totalDuration: 0,
-          };
-        }
+    let durationByViewId = new Map<string, number>();
+    try {
+      const result = await getViewDurationsBatch({
+        viewIds: allViewIds.join(","),
+        since: 0,
       });
+      durationByViewId = new Map(
+        result.data.map((row) => [row.viewId, row.sum_duration]),
+      );
+    } catch (error) {
+      console.error(
+        `Error fetching batched view durations for viewer ${viewerId}:`,
+        error,
+      );
+    }
 
-      const batchResults = await Promise.all(batchPromises);
-      batchResults.forEach(result => {
-        durationsMap[result.documentId] = result.totalDuration;
-      });
+    for (const view of groupedViews) {
+      durationsMap[view.documentId] = view.viewIds.reduce(
+        (sum, viewId) => sum + (durationByViewId.get(viewId) ?? 0),
+        0,
+      );
     }
 
     await redis.set(cacheKey, JSON.stringify(durationsMap), { ex: 600 });
