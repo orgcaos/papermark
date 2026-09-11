@@ -22,6 +22,7 @@ import useSWR from "swr";
 
 import { useAnalytics } from "@/lib/analytics";
 import { usePlan } from "@/lib/swr/use-billing";
+import { constructLinkUrl } from "@/lib/utils/link-url";
 import useDataroomGroups from "@/lib/swr/use-dataroom-groups";
 import { useDomains } from "@/lib/swr/use-domains";
 import useLimits from "@/lib/swr/use-limits";
@@ -29,6 +30,10 @@ import { LinkWithViews, WatermarkConfig } from "@/lib/types";
 import { convertDataUrlToFile, fetcher, uploadImage } from "@/lib/utils";
 
 import { UpgradePlanModal } from "@/components/billing/upgrade-plan-modal";
+import {
+  ShareLinkReadyModal,
+  type ShareLinkReadyModalData,
+} from "@/components/links/share-link-ready-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,6 +171,7 @@ export default function LinkSheet({
   existingLinks,
   linkTargetId,
   onLinkCreatedNavigate,
+  documentName,
 }: {
   isOpen: boolean;
   setIsOpen: Dispatch<SetStateAction<boolean>>;
@@ -176,6 +182,8 @@ export default function LinkSheet({
   linkTargetId?: string | null;
   /** Called after a new link is created (not on update) */
   onLinkCreatedNavigate?: (targetId: string) => void;
+  /** Document name, used to label the "Share link ready" email card (DOCUMENT_LINK only) */
+  documentName?: string;
 }) {
   const router = useRouter();
   const { id: routeId, groupId } = router.query as {
@@ -183,6 +191,9 @@ export default function LinkSheet({
     groupId?: string;
   };
   const targetId = linkTargetId ?? routeId;
+
+  const [shareModalData, setShareModalData] =
+    useState<ShareLinkReadyModalData | null>(null);
 
   const { domains } = useDomains({ enabled: isOpen });
 
@@ -659,6 +670,15 @@ export default function LinkSheet({
       });
 
       toast.success("Link created successfully");
+
+      if (linkType === LinkType.DOCUMENT_LINK && documentName) {
+        setShareModalData({
+          url: constructLinkUrl(returnedLink),
+          documentName,
+          thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${targetId}`,
+        });
+      }
+
       onLinkCreatedNavigate?.(targetId);
     }
 
@@ -671,6 +691,7 @@ export default function LinkSheet({
   };
 
   return (
+    <>
     <Sheet open={isOpen} onOpenChange={(open: boolean) => setIsOpen(open)}>
       <SheetContent
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -1009,5 +1030,10 @@ export default function LinkSheet({
         </form>
       </SheetContent>
     </Sheet>
+    <ShareLinkReadyModal
+      data={shareModalData}
+      onClose={() => setShareModalData(null)}
+    />
+    </>
   );
 }

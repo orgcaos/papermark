@@ -254,6 +254,7 @@ export default function DocumentPage() {
           linkType="DOCUMENT_LINK"
           setIsOpen={setIsLinkSheetOpen}
           existingLinks={links}
+          documentName={prismaDocument.name}
         />
 
         <BulkImportLinksModal
