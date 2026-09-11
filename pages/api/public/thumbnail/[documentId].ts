@@ -53,7 +53,13 @@ export default async function handle(
 
     const primaryVersion = await prisma.documentVersion.findFirst({
       where: { documentId, isPrimary: true },
-      select: { id: true },
+      select: {
+        id: true,
+        hasPages: true,
+        type: true,
+        file: true,
+        storageType: true,
+      },
       orderBy: { versionNumber: "desc" },
     });
 
@@ -62,22 +68,44 @@ export default async function handle(
       return;
     }
 
-    const firstPage = await prisma.documentPage.findUnique({
-      where: {
-        pageNumber_versionId: { pageNumber: 1, versionId: primaryVersion.id },
-      },
-      select: { file: true, storageType: true },
-    });
+    // Two shapes of "first page image" depending on document type:
+    // - PDFs and anything converted to pages (docs, slides): a real
+    //   DocumentPage row exists per page, pageNumber 1 is the thumbnail.
+    // - Raw image uploads (jpg/png/etc.) never get paginated — the image
+    //   IS the document, stored directly on the version record. Matches
+    //   the same branching preview-data.ts uses to serve these two cases.
+    let thumbnailSource: { file: string; storageType: DocumentStorageType } | null =
+      null;
 
-    if (!firstPage) {
+    if (primaryVersion.hasPages) {
+      const firstPage = await prisma.documentPage.findUnique({
+        where: {
+          pageNumber_versionId: { pageNumber: 1, versionId: primaryVersion.id },
+        },
+        select: { file: true, storageType: true },
+      });
+      if (firstPage) {
+        thumbnailSource = firstPage;
+      }
+    } else if (primaryVersion.type === "image") {
+      thumbnailSource = {
+        file: primaryVersion.file,
+        storageType: primaryVersion.storageType,
+      };
+    }
+
+    if (!thumbnailSource) {
+      // Video, sheet, html, notion, etc. — no static image representation
+      // to serve here yet. The email card will just show a broken image
+      // for these types for now.
       res.status(404).end();
       return;
     }
 
-    if (firstPage.storageType === DocumentStorageType.VERCEL_BLOB) {
+    if (thumbnailSource.storageType === DocumentStorageType.VERCEL_BLOB) {
       // Vercel Blob URLs are already public and stable — just redirect.
       res.setHeader("Cache-Control", "public, max-age=86400");
-      res.redirect(302, firstPage.file);
+      res.redirect(302, thumbnailSource.file);
       return;
     }
 
@@ -91,7 +119,7 @@ export default async function handle(
     );
 
     const object = await client.send(
-      new GetObjectCommand({ Bucket: config.bucket, Key: firstPage.file }),
+      new GetObjectCommand({ Bucket: config.bucket, Key: thumbnailSource.file }),
     );
 
     res.setHeader("Content-Type", object.ContentType || "image/jpeg");
