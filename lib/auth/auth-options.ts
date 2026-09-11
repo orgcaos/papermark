@@ -84,14 +84,18 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
-    PasskeyProvider({
-      tenant: hanko,
-      async authorize({ userId }) {
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user) return null;
-        return user;
-      },
-    }),
+    ...(process.env.HANKO_API_KEY && process.env.NEXT_PUBLIC_HANKO_TENANT_ID
+      ? [
+          PasskeyProvider({
+            tenant: hanko,
+            async authorize({ userId }: { userId: string }) {
+              const user = await prisma.user.findUnique({ where: { id: userId } });
+              if (!user) return null;
+              return user;
+            },
+          }),
+        ]
+      : []),
     {
       id: "saml",
       name: "BoxyHQ SAML",
@@ -180,18 +184,6 @@ export const authOptions: NextAuthOptions = {
   ],
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
-  cookies: {
-    sessionToken: {
-      name: `${VERCEL_DEPLOYMENT ? "__Secure-" : ""}next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        domain: VERCEL_DEPLOYMENT ? ".papermark.com" : undefined,
-        secure: VERCEL_DEPLOYMENT,
-      },
-    },
-  },
   callbacks: {
     jwt: async (params) => {
       const { token, user, trigger, account } = params;

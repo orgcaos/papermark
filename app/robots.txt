@@ -1,5 +1,2 @@
 User-Agent: *
-Disallow: /register
-Disallow: /verify/
-Disallow: /auth/
-Disallow: /unsubscribe
+Disallow: /

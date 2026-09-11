@@ -20,6 +20,13 @@ function isAnalyticsPath(path: string) {
 }
 
 function isCustomDomain(host: string) {
+  const appBaseHost = process.env.NEXT_PUBLIC_APP_BASE_HOST?.toLowerCase().trim();
+  const hostname = host?.split(":")[0]?.toLowerCase().trim();
+
+  if (appBaseHost && hostname === appBaseHost) {
+    return false;
+  }
+
   return (
     (process.env.NODE_ENV === "development" &&
       (host?.includes(".local") || host?.includes("papermark.dev"))) ||

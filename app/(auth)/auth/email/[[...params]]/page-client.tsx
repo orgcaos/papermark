@@ -76,8 +76,10 @@ export default function EmailVerificationClient() {
       }
 
       // Redirect to the callback URL
+      // Use a real browser navigation (not client-side router.push) so the
+      // Set-Cookie from NextAuth's callback endpoint is actually honored.
       if (data.callbackUrl) {
-        router.push(data.callbackUrl);
+        window.location.href = data.callbackUrl;
       } else {
         // No callback URL in response - stop loading and show error
         setIsLoading(false);
