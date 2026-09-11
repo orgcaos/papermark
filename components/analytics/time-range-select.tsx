@@ -61,6 +61,8 @@ interface TimeRangeSelectProps<T extends TimeRange> {
   /** Dashboard-only latch recording that the user has picked a range. */
   slug?: React.MutableRefObject<boolean>;
   isPremium?: boolean;
+  /** Smaller pill-style trigger for sitting inside a card header instead of a page header. */
+  compact?: boolean;
 }
 
 export function TimeRangeSelect<T extends TimeRange>({
@@ -72,6 +74,7 @@ export function TimeRangeSelect<T extends TimeRange>({
   onCustomRangeComplete,
   slug,
   isPremium = false,
+  compact = false,
 }: TimeRangeSelectProps<T>) {
   const selectedRange = ranges.find((range) => range.value === value);
   const [date, setDate] = useState<DateRange | undefined>({
@@ -165,18 +168,22 @@ export function TimeRangeSelect<T extends TimeRange>({
         <Button
           variant="outline"
           className={cn(
-            "w-auto justify-between text-left font-normal sm:w-[300px]",
+            compact
+              ? "h-7 w-auto gap-1 px-2 text-left font-normal"
+              : "w-auto justify-between text-left font-normal sm:w-[300px]",
             !date && "text-muted-foreground",
           )}
         >
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <CalendarIcon className="h-4 w-4 shrink-0" />
+            {!compact && <CalendarIcon className="h-4 w-4 shrink-0" />}
             <span className="text-xs sm:text-sm">
               {value === "custom" && date?.from ? (
                 <>
                   {format(date.from, "MMM d")} -{" "}
                   {format(date.to || date.from, "MMM d, yyyy")}
                 </>
+              ) : compact ? (
+                selectedRange?.value
               ) : (
                 selectedRange?.label
               )}

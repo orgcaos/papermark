@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 
 import { useTeam } from "@/context/team-context";
 import { addDays, format } from "date-fns";
-import { BarChart3, FileTextIcon, LinkIcon } from "lucide-react";
+import { FileTextIcon, LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 import useSWR from "swr";
 
@@ -16,12 +16,15 @@ import { AnalyticsCard } from "@/components/analytics/analytics-card";
 import DashboardViewsChart from "@/components/analytics/dashboard-views-chart";
 import DocumentsTable from "@/components/analytics/documents-table";
 import LinksTable from "@/components/analytics/links-table";
+import { OverviewStatCards } from "@/components/analytics/overview-stat-cards";
+import { RecentActivityCard } from "@/components/analytics/recent-activity-card";
 import {
   DASHBOARD_TIME_RANGES,
   DashboardTimeRange,
   TimeRangeSelect,
   isDashboardTimeRange,
 } from "@/components/analytics/time-range-select";
+import { TopDocumentsCard } from "@/components/analytics/top-documents-card";
 import ViewsTable from "@/components/analytics/views-table";
 import VisitorsTable from "@/components/analytics/visitors-table";
 import AppLayout from "@/components/layouts/app";
@@ -35,6 +38,25 @@ interface OverviewData {
     visitors: number;
     views: number;
   };
+  stats?: {
+    totalDocuments: number;
+    totalLinks: number;
+    totalViews: number;
+    views30d: number;
+  };
+  topDocuments?: {
+    id: string;
+    name: string;
+    views: number;
+    links: number;
+  }[];
+  recentActivity?: {
+    id: string;
+    viewerName: string | null;
+    documentName: string;
+    viewedAt: string;
+    location: { city: string; country: string } | null;
+  }[];
   graph: {
     date: string;
     views: number;
@@ -153,22 +175,26 @@ export default function DashboardPage() {
       <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold tracking-tight sm:text-3xl">Dashboard</h2>
-          <TimeRangeSelect
-            value={interval}
-            onChange={handleTimeRangeChange}
-            ranges={DASHBOARD_TIME_RANGES}
-            customRange={customRange}
-            setCustomRange={setCustomRange}
-            onCustomRangeComplete={handleCustomRangeComplete}
-            slug={slug}
-            isPremium={isPremium}
-          />
         </div>
 
         <div className="relative space-y-4">
+          <OverviewStatCards stats={overview?.stats} isLoading={isLoading} />
+
           <AnalyticsCard
             title="Views Overview"
-            icon={<BarChart3 className="h-4 w-4" />}
+            icon={
+              <TimeRangeSelect
+                value={interval}
+                onChange={handleTimeRangeChange}
+                ranges={DASHBOARD_TIME_RANGES}
+                customRange={customRange}
+                setCustomRange={setCustomRange}
+                onCustomRangeComplete={handleCustomRangeComplete}
+                slug={slug}
+                isPremium={isPremium}
+                compact
+              />
+            }
             contentClassName="space-y-4"
           >
             <div className="relative">
@@ -196,6 +222,18 @@ export default function DashboardPage() {
               )}
             </div>
           </AnalyticsCard>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <TopDocumentsCard
+              documents={overview?.topDocuments}
+              isLoading={isLoading}
+              interval={interval}
+            />
+            <RecentActivityCard
+              activity={overview?.recentActivity}
+              isLoading={isLoading}
+            />
+          </div>
 
           <TabMenu
             navigation={[

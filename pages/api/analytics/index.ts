@@ -11,6 +11,7 @@ import {
   getLinkDurationsBatch,
   getPageDurationsBatch,
   getViewDurationsBatch,
+  getViewUserAgent_v2,
 } from "@/lib/tinybird/pipes";
 import { CustomUser } from "@/lib/types";
 import { durationFormat } from "@/lib/utils";
@@ -168,7 +169,26 @@ export default async function handler(
 
     switch (type) {
       case "overview": {
-        const [viewStats, graphData, linkCount] = await Promise.all([
+        // All-time (not interval-scoped) view filter, respecting a pause date
+        // the same way the rest of the analytics surface does.
+        const allTimeViewFilter = pauseStartsAt
+          ? { lt: pauseStartsAt }
+          : undefined;
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+        thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+        const [
+          viewStats,
+          graphData,
+          linkCount,
+          totalDocuments,
+          totalViews,
+          views30d,
+          topDocumentViews,
+          recentViews,
+        ] = await Promise.all([
           prisma.view.findMany({
             where: {
               teamId,
@@ -231,6 +251,63 @@ export default async function handler(
           prisma.link.count({
             where: { teamId, deletedAt: null },
           }),
+          // Total documents in the workspace (not just ones with views).
+          prisma.document.count({ where: { teamId } }),
+          // All-time view count, for the "Total Views" stat block.
+          prisma.view.count({
+            where: {
+              teamId,
+              isArchived: false,
+              viewType: "DOCUMENT_VIEW",
+              ...(allTimeViewFilter && { viewedAt: allTimeViewFilter }),
+            },
+          }),
+          // Fixed last-30-days view count, independent of the interval
+          // dropdown (which only drives the graph below).
+          prisma.view.count({
+            where: {
+              teamId,
+              isArchived: false,
+              viewType: "DOCUMENT_VIEW",
+              viewedAt: {
+                gte: thirtyDaysAgo,
+                ...(allTimeViewFilter ?? {}),
+              },
+            },
+          }),
+          // Top 5 documents by all-time view count, for the "Top documents" card.
+          prisma.view.groupBy({
+            by: ["documentId"],
+            where: {
+              teamId,
+              isArchived: false,
+              viewType: "DOCUMENT_VIEW",
+              documentId: { not: null },
+              ...(allTimeViewFilter && { viewedAt: allTimeViewFilter }),
+            },
+            _count: { id: true },
+            orderBy: { _count: { id: "desc" } },
+            take: 5,
+          }),
+          // Last 8 views team-wide, for the "Recent activity" card.
+          prisma.view.findMany({
+            where: {
+              teamId,
+              isArchived: false,
+              viewType: "DOCUMENT_VIEW",
+              ...(allTimeViewFilter && { viewedAt: allTimeViewFilter }),
+            },
+            orderBy: { viewedAt: "desc" },
+            take: 8,
+            select: {
+              id: true,
+              viewerName: true,
+              viewerEmail: true,
+              viewedAt: true,
+              documentId: true,
+              document: { select: { name: true } },
+            },
+          }),
         ]);
 
         const uniqueLinks = new Set(viewStats.map((view) => view.linkId));
@@ -239,6 +316,74 @@ export default async function handler(
         );
         const uniqueVisitors = new Set(viewStats.map((view) => view.viewerId));
 
+        // Resolve names + non-deleted link counts for the top documents.
+        const topDocumentIds = topDocumentViews
+          .map((row) => row.documentId)
+          .filter((id): id is string => !!id);
+        const topDocumentDetails =
+          topDocumentIds.length > 0
+            ? await prisma.document.findMany({
+                where: { id: { in: topDocumentIds }, teamId },
+                select: {
+                  id: true,
+                  name: true,
+                  _count: { select: { links: { where: { deletedAt: null } } } },
+                },
+              })
+            : [];
+        const topDocumentDetailsById = new Map(
+          topDocumentDetails.map((doc) => [doc.id, doc]),
+        );
+        const topDocuments = topDocumentViews
+          .map((row) => {
+            const doc = row.documentId
+              ? topDocumentDetailsById.get(row.documentId)
+              : undefined;
+            if (!doc) return null;
+            return {
+              id: doc.id,
+              name: doc.name,
+              views: row._count.id,
+              links: doc._count.links,
+            };
+          })
+          .filter((doc): doc is NonNullable<typeof doc> => !!doc);
+
+        // Best-effort location lookup per recent view -- bounded to the small
+        // fixed page size above, so this doesn't reintroduce the N+1 Tinybird
+        // query problem the batched pipes were added to fix.
+        const recentActivity = await Promise.all(
+          recentViews.map(async (view) => {
+            let location: { city: string; country: string } | null = null;
+            if (view.documentId) {
+              try {
+                const userAgent = await getViewUserAgent_v2({
+                  documentId: view.documentId,
+                  viewId: view.id,
+                  since: 0,
+                });
+                const row = userAgent.data?.[0];
+                if (row?.city && row?.country && row.country !== "Unknown") {
+                  location = { city: row.city, country: row.country };
+                }
+              } catch (error) {
+                console.error(
+                  "[overview] getViewUserAgent_v2 failed, omitting location",
+                  error,
+                );
+              }
+            }
+
+            return {
+              id: view.id,
+              viewerName: view.viewerName || view.viewerEmail || null,
+              documentName: view.document?.name ?? "Untitled document",
+              viewedAt: view.viewedAt,
+              location,
+            };
+          }),
+        );
+
         return res.status(200).json({
           counts: {
             links: uniqueLinks.size,
@@ -246,6 +391,14 @@ export default async function handler(
             visitors: uniqueVisitors.size,
             views: viewStats.length,
           },
+          stats: {
+            totalDocuments,
+            totalLinks: linkCount,
+            totalViews,
+            views30d,
+          },
+          topDocuments,
+          recentActivity,
           graph: (graphData as { date: Date; views: bigint }[]).map(
             (point) => ({
               date: point.date,

@@ -2,8 +2,8 @@ import { useMemo } from "react";
 
 import { format } from "date-fns";
 import {
-  Bar,
-  BarChart,
+  Area,
+  AreaChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -185,27 +185,19 @@ export default function DashboardViewsChart({
     return formattedData.map((d) => d.name);
   }, [timeRange, formattedData, totalDays]);
 
-  const barSize = useMemo(() => {
-    if (timeRange === "24h") return 14;
-    if (timeRange === "7d") return 32;
-    if (timeRange === "30d") return 16;
-
-    if (startDate && endDate) {
-      if (totalDays > 365) return 32;
-      if (totalDays > 30) return 22;
-    }
-
-    return 16;
-  }, [timeRange, startDate, endDate, totalDays]);
-
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart
+        <AreaChart
           data={formattedData}
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-          barSize={barSize}
         >
+          <defs>
+            <linearGradient id="viewsAreaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="rgb(16 185 129)" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="rgb(16 185 129)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <XAxis
             dataKey="name"
             stroke="#888888"
@@ -260,14 +252,16 @@ export default function DashboardViewsChart({
               return null;
             }}
           />
-          <Bar
+          <Area
+            type="monotone"
             dataKey="views"
-            fill="rgb(16 185 129)"
             stroke="rgb(16 185 129)"
-            strokeWidth={1}
-            radius={[0, 0, 0, 0]}
+            strokeWidth={2}
+            fill="url(#viewsAreaFill)"
+            dot={{ r: 3, strokeWidth: 0, fill: "rgb(16 185 129)" }}
+            activeDot={{ r: 5, strokeWidth: 0, fill: "rgb(16 185 129)" }}
           />
-        </BarChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );
