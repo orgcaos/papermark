@@ -12,7 +12,6 @@ import {
   XIcon,
 } from "lucide-react";
 
-import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 import { useSelfMembership } from "@/lib/hooks/use-self-membership";
 import { usePlan } from "@/lib/swr/use-billing";
 import useLimits from "@/lib/swr/use-limits";
@@ -30,7 +29,6 @@ export function MobileMoreMenu({ open, onClose }: MobileMoreMenuProps) {
   const router = useRouter();
   const { isFree, isTrial } = usePlan();
   const { limits } = useLimits();
-  const { isAdmin } = useIsAdmin();
   // Scoped members can't reach team-wide areas (visitors, branding, settings).
   const { isDataroomMember } = useSelfMembership();
   const [settingsExpanded, setSettingsExpanded] = useState(() =>
@@ -55,7 +53,6 @@ export function MobileMoreMenu({ open, onClose }: MobileMoreMenuProps) {
 
   const settingsSubItems = [
     { label: "Notifications", href: "/settings/notifications" },
-    ...(isAdmin ? [{ label: "Security", href: "/settings/security" }] : []),
   ];
 
   return (

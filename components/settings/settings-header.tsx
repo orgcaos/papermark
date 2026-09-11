@@ -1,12 +1,6 @@
-import { useFeatureFlags } from "@/lib/hooks/use-feature-flags";
-import { useIsAdmin } from "@/lib/hooks/use-is-admin";
-
 import { NavMenu } from "../navigation-menu";
 
 export function SettingsHeader() {
-  const { features } = useFeatureFlags();
-  const { isAdmin } = useIsAdmin();
-
   return (
     <header>
       <section className="mb-4 flex items-center justify-between md:mb-8 lg:mb-12">
@@ -46,28 +40,6 @@ export function SettingsHeader() {
             label: "Notifications",
             href: `/settings/notifications`,
             segment: "notifications",
-          },
-          {
-            label: "AI",
-            href: `/settings/ai`,
-            segment: "ai",
-            disabled: !features?.ai,
-          },
-          {
-            label: "Webhooks",
-            href: `/settings/webhooks`,
-            segment: "webhooks",
-          },
-          {
-            label: "API Keys",
-            href: `/settings/tokens`,
-            segment: "tokens",
-          },
-          {
-            label: "Security",
-            href: `/settings/security`,
-            segment: "security",
-            disabled: !isAdmin,
           },
         ]}
       />

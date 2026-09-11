@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 
 import { useFeatureFlags } from "@/lib/hooks/use-feature-flags";
-import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 import { usePlan } from "@/lib/swr/use-billing";
 import useLimits from "@/lib/swr/use-limits";
 import { nFormatter } from "@/lib/utils";
@@ -48,7 +47,6 @@ export function AppSidebarContent() {
   const { features } = useFeatureFlags();
 
   // Check if current user is admin (for gating Security)
-  const { isAdmin } = useIsAdmin();
 
   useEffect(() => {
     if (Cookies.get("hideProBanner") !== "pro-banner") {
@@ -117,15 +115,6 @@ export function AppSidebarContent() {
             url: "/settings/notifications",
             current: router.pathname.includes("settings/notifications"),
           },
-          ...(isAdmin
-            ? [
-                {
-                  title: "Security",
-                  url: "/settings/security",
-                  current: router.pathname.includes("settings/security"),
-                },
-              ]
-            : []),
         ],
       },
     ],
