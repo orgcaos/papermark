@@ -9,7 +9,7 @@ import { DocumentData } from "@/lib/documents/create-document";
 import { getFeatureFlags } from "@/lib/featureFlags";
 import prisma from "@/lib/prisma";
 import { processVideo } from "@/lib/trigger/optimize-video-files";
-import { convertPdfToImageRoute } from "@/lib/trigger/pdf-to-image-route";
+import { processPdfInline } from "@/lib/documents/process-pdf-inline";
 import { getExtension } from "@/lib/utils";
 import { isMarkdownFile } from "@/lib/utils/get-content-type";
 import { conversionQueueName } from "@/lib/utils/trigger-utils";
@@ -212,25 +212,22 @@ export const processDocument = async ({
     );
   }
 
-  // skip triggering convert-pdf-to-image job for "notion" / "excel" documents
+  // skip processing for "notion" / "excel" documents
   if (type === "pdf") {
-    await convertPdfToImageRoute.trigger(
-      {
+    // Fire-and-forget: this always-on server has no Vercel-style request
+    // time limit, so conversion just runs in-process here instead of being
+    // queued to Trigger.dev (not configured for this deployment - see
+    // lib/documents/process-pdf-inline.ts for why).
+    processPdfInline({
+      documentId: document.id,
+      documentVersionId: document.versions[0].id,
+      teamId,
+    }).catch((error) => {
+      console.error("[pdf-inline] uncaught error", {
         documentId: document.id,
-        documentVersionId: document.versions[0].id,
-        teamId,
-      },
-      {
-        idempotencyKey: `${teamId}-${document.versions[0].id}`,
-        tags: [
-          `team_${teamId}`,
-          `document_${document.id}`,
-          `version:${document.versions[0].id}`,
-        ],
-        queue: conversionQueueName(teamPlan),
-        concurrencyKey: teamId,
-      },
-    );
+        error,
+      });
+    });
   }
 
   if (type === "sheet" && enableExcelAdvancedMode) {
