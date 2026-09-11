@@ -53,6 +53,7 @@ import {
 import { Button } from "../ui/button";
 import { AnnotationToggle } from "./annotations/annotation-toggle";
 import { ConversationSidebar } from "./conversations/sidebar";
+import { PageJumpControl } from "./nav-page-jump";
 
 export type TNavData = {
   linkId: string;
@@ -87,6 +88,7 @@ export default function Nav({
   handleFullscreen,
   isFullscreen,
   hidePageCount,
+  onGoToPage,
 }: {
   navData: TNavData;
   type?: "pdf" | "notion" | "sheet";
@@ -99,6 +101,8 @@ export default function Nav({
   handleFullscreen?: () => void;
   isFullscreen?: boolean;
   hidePageCount?: boolean;
+  /** Click-to-jump on the page-count chip; omit to keep it as plain text. */
+  onGoToPage?: (page: number) => void;
 }) {
   const router = useRouter();
   const asPath = router.asPath;
@@ -153,16 +157,10 @@ export default function Nav({
           />
         );
       case "papermark":
-        return (
-          <Link
-            href="https://view.orgcaos.com"
-            target="_blank"
-            className="text-2xl font-bold tracking-tighter"
-            style={{ color: navColorPalette.textColor }}
-          >
-            Orgcaos Docket
-          </Link>
-        );
+        // No custom brand logo configured for this deployment - leave the
+        // corner empty instead of showing a wordmark (the zoom/fullscreen
+        // controls live here now, see the left-side slot below).
+        return null;
       case "none":
         return null;
       default: {
@@ -289,13 +287,90 @@ export default function Nav({
           <div className="flex flex-1 items-center justify-start">
             {/* Without a logo the slot must not reserve its width, or a ghost
                 spacer pushes the breadcrumb off the left edge. */}
-            <div
-              className={cn(
-                "relative flex h-16 flex-shrink-0 items-center",
-                resolvedBrandLogo.kind !== "none" && "w-36",
-              )}
-            >
+            <div className="relative flex h-16 flex-shrink-0 items-center gap-1">
               {renderBrandLogo()}
+              {!isMobile && handleZoomIn && handleZoomOut && (
+                <div className="flex gap-1">
+                  <TooltipProvider delayDuration={50}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleZoomIn}
+                          className="bg-gray-900 text-white hover:bg-gray-900/80"
+                          size="icon"
+                        >
+                          <ZoomInIcon className="h-5 w-5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <span className="mr-2 text-xs">
+                          {t("nav.zoomIn", "Zoom in")}
+                        </span>
+                        <span className="ml-auto rounded-sm border bg-muted p-0.5 text-xs tracking-widest text-muted-foreground">
+                          ⌘+
+                        </span>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider delayDuration={50}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleZoomOut}
+                          className="bg-gray-900 text-white hover:bg-gray-900/80"
+                          size="icon"
+                        >
+                          <ZoomOutIcon className="h-5 w-5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <span className="mr-2 text-xs">
+                          {t("nav.zoomOut", "Zoom out")}
+                        </span>
+                        <span className="ml-auto rounded-sm border bg-muted p-0.5 text-xs tracking-widest text-muted-foreground">
+                          ⌘-
+                        </span>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  {handleFullscreen && (
+                    <TooltipProvider delayDuration={50}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={handleFullscreen}
+                            className="bg-gray-900 text-white hover:bg-gray-900/80"
+                            size="icon"
+                            aria-label={
+                              isFullscreen
+                                ? t("nav.exitFullscreen", "Exit fullscreen")
+                                : t("nav.fullscreen", "Fullscreen")
+                            }
+                          >
+                            {isFullscreen ? (
+                              <Minimize className="h-5 w-5" />
+                            ) : (
+                              <Maximize className="h-5 w-5" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <span className="mr-2 text-xs">
+                            {isFullscreen
+                              ? t("nav.exitFullscreen", "Exit fullscreen")
+                              : t("nav.fullscreen", "Fullscreen")}
+                          </span>
+                          <span className="ml-auto rounded-sm border bg-muted p-0.5 text-xs tracking-widest text-muted-foreground">
+                            F
+                          </span>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
+              )}
             </div>
             {isDataroom ? (
               <Breadcrumb className="ml-6">
@@ -457,102 +532,27 @@ export default function Nav({
               </Button>
             )}
 
-            {!isMobile && handleZoomIn && handleZoomOut && (
-              <div className="flex gap-1">
-                <TooltipProvider delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        onClick={handleZoomIn}
-                        className="bg-gray-900 text-white hover:bg-gray-900/80"
-                        size="icon"
-                      >
-                        <ZoomInIcon className="h-5 w-5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <span className="mr-2 text-xs">
-                        {t("nav.zoomIn", "Zoom in")}
-                      </span>
-                      <span className="ml-auto rounded-sm border bg-muted p-0.5 text-xs tracking-widest text-muted-foreground">
-                        ⌘+
-                      </span>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        onClick={handleZoomOut}
-                        className="bg-gray-900 text-white hover:bg-gray-900/80"
-                        size="icon"
-                      >
-                        <ZoomOutIcon className="h-5 w-5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <span className="mr-2 text-xs">
-                        {t("nav.zoomOut", "Zoom out")}
-                      </span>
-                      <span className="ml-auto rounded-sm border bg-muted p-0.5 text-xs tracking-widest text-muted-foreground">
-                        ⌘-
-                      </span>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                {handleFullscreen && (
-                  <TooltipProvider delayDuration={50}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={handleFullscreen}
-                          className="bg-gray-900 text-white hover:bg-gray-900/80"
-                          size="icon"
-                          aria-label={
-                            isFullscreen
-                              ? t("nav.exitFullscreen", "Exit fullscreen")
-                              : t("nav.fullscreen", "Fullscreen")
-                          }
-                        >
-                          {isFullscreen ? (
-                            <Minimize className="h-5 w-5" />
-                          ) : (
-                            <Maximize className="h-5 w-5" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <span className="mr-2 text-xs">
-                          {isFullscreen
-                            ? t("nav.exitFullscreen", "Exit fullscreen")
-                            : t("nav.fullscreen", "Fullscreen")}
-                        </span>
-                        <span className="ml-auto rounded-sm border bg-muted p-0.5 text-xs tracking-widest text-muted-foreground">
-                          F
-                        </span>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-            )}
-
             {!hidePageCount && pageNumber && numPages && numPages > 1 ? (
-              <div className="flex h-8 items-center space-x-1 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white sm:h-10 sm:px-4 sm:py-2 sm:text-sm">
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                  {pageNumber}
-                </span>
-                <span className="text-gray-400">/</span>
-                <span
-                  className="text-gray-400"
-                  style={{ fontVariantNumeric: "tabular-nums" }}
-                >
-                  {numPages}
-                </span>
-              </div>
+              onGoToPage ? (
+                <PageJumpControl
+                  pageNumber={pageNumber}
+                  numPages={numPages}
+                  onGoToPage={onGoToPage}
+                />
+              ) : (
+                <div className="flex h-8 items-center space-x-1 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white sm:h-10 sm:px-4 sm:py-2 sm:text-sm">
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {pageNumber}
+                  </span>
+                  <span className="text-gray-400">/</span>
+                  <span
+                    className="text-gray-400"
+                    style={{ fontVariantNumeric: "tabular-nums" }}
+                  >
+                    {numPages}
+                  </span>
+                </div>
+              )
             ) : null}
           </div>
         </div>

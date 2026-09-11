@@ -555,6 +555,39 @@ export default function PagesVerticalViewer({
     }
   };
 
+  // Jump straight to a specific real document page (used by the nav bar's
+  // click-to-type page number control). Deliberately only targets 1..numPages
+  // - the feedback "page" isn't reachable this way.
+  const goToPage = (targetPage: number) => {
+    if (
+      targetPage < 1 ||
+      targetPage > numPages ||
+      targetPage === pageNumber
+    ) {
+      return;
+    }
+
+    const duration = getActiveDuration();
+    trackPageViewSafely({
+      linkId,
+      documentId,
+      viewId,
+      duration,
+      pageNumber: pageNumber,
+      versionNumber,
+      dataroomId,
+      setViewedPages,
+      isPreview,
+    });
+
+    const targetImg = imageRefs.current[targetPage - 1];
+    if (targetImg) {
+      targetImg.scrollIntoView({ behavior: "smooth", block: "start" });
+      setPageNumber(targetPage);
+      startTimeRef.current = Date.now();
+    }
+  };
+
   useViewerPageKeyboardShortcuts({
     orientation: "vertical",
     onPreviousPage: goToPreviousPage,
@@ -818,6 +851,7 @@ export default function PagesVerticalViewer({
           handleFullscreen={toggleFullscreen}
           isFullscreen={isFullscreen}
           navData={navData}
+          onGoToPage={goToPage}
         />
       )}
       <div style={viewportStyle} className="relative overflow-hidden">

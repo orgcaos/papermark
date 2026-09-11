@@ -74,7 +74,9 @@ export const DEFAULT_LINK_PROPS = (
   slug: null,
   expiresAt: null,
   password: null,
-  emailProtected: true,
+  // Default new links to open with no email gate - Savvas's clients
+  // shouldn't have to enter an email to view a shared document.
+  emailProtected: false,
   emailAuthenticated: false,
   allowDownload: false,
   allowList: [],

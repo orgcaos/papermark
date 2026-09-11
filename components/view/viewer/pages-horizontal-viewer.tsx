@@ -461,6 +461,35 @@ export default function PagesHorizontalViewer({
     startTimeRef.current = Date.now();
   };
 
+  // Jump straight to a specific real document page (used by the nav bar's
+  // click-to-type page number control). Deliberately only targets 1..numPages
+  // - the feedback/account-creation virtual "pages" aren't reachable this way.
+  const goToPage = (targetPage: number) => {
+    if (
+      targetPage < 1 ||
+      targetPage > numPages ||
+      targetPage === pageNumber
+    ) {
+      return;
+    }
+
+    const duration = getActiveDuration();
+    trackPageViewSafely({
+      linkId,
+      documentId,
+      viewId,
+      duration,
+      pageNumber: pageNumber,
+      versionNumber,
+      dataroomId,
+      setViewedPages,
+      isPreview,
+    });
+
+    setPageNumber(targetPage);
+    startTimeRef.current = Date.now();
+  };
+
   useViewerPageKeyboardShortcuts({
     orientation: "horizontal",
     onPreviousPage: goToPreviousPage,
@@ -766,6 +795,7 @@ export default function PagesHorizontalViewer({
           isFullscreen={isFullscreen}
           hidePageCount={isMobile}
           navData={navData}
+          onGoToPage={goToPage}
         />
       )}
       <div
