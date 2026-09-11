@@ -11,7 +11,7 @@ import { enforceDocumentMemberScope } from "@/lib/api/rbac/guard";
 import { getFeatureFlags } from "@/lib/featureFlags";
 import prisma from "@/lib/prisma";
 import { processVideo } from "@/lib/trigger/optimize-video-files";
-import { convertPdfToImageRoute } from "@/lib/trigger/pdf-to-image-route";
+import { processPdfInline } from "@/lib/documents/process-pdf-inline";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
 import { isMarkdownFile } from "@/lib/utils/get-content-type";
@@ -224,25 +224,22 @@ export default async function handle(
 
       // trigger document uploaded event to trigger convert-pdf-to-image job
       if (type === "pdf") {
-        await convertPdfToImageRoute.trigger(
-          {
+        // Fire-and-forget: this always-on server has no Vercel-style request
+        // time limit, so conversion just runs in-process here instead of being
+        // queued to Trigger.dev (not configured for this deployment - see
+        // lib/documents/process-pdf-inline.ts for why).
+        processPdfInline({
+          documentId: documentId,
+          documentVersionId: version.id,
+          teamId,
+          versionNumber: version.versionNumber,
+        }).catch((error) => {
+          console.error("[pdf-inline] uncaught error", {
             documentId: documentId,
             documentVersionId: version.id,
-            teamId,
-            // docId: version.file.split("/")[1], // Extract doc_xxxx from teamId/doc_xxxx/filename
-            versionNumber: version.versionNumber,
-          },
-          {
-            idempotencyKey: `${teamId}-${version.id}`,
-            tags: [
-              `team_${teamId}`,
-              `document_${documentId}`,
-              `version:${version.id}`,
-            ],
-            queue: conversionQueueName(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+            error,
+          });
+        });
       }
 
       res.status(200).json({ id: documentId });
