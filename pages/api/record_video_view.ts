@@ -7,7 +7,7 @@ import { newId } from "@/lib/id-helper";
 import { recordVideoView } from "@/lib/tinybird";
 import { Geo } from "@/lib/types";
 import { capitalize, getDomainWithoutWWW, log } from "@/lib/utils";
-import { LOCALHOST_GEO_DATA, getGeoData } from "@/lib/utils/geo";
+import { getGeoData, lookupGeoFromIp } from "@/lib/utils/geo";
 import { getIpAddress } from "@/lib/utils/ip";
 import { userAgentFromString } from "@/lib/utils/user-agent";
 
@@ -57,16 +57,18 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
+  const ipAddress = getIpAddress(req.headers);
+
   const geo: Geo =
-    process.env.VERCEL === "1" ? getGeoData(req.headers) : LOCALHOST_GEO_DATA;
+    process.env.VERCEL === "1"
+      ? getGeoData(req.headers)
+      : await lookupGeoFromIp(ipAddress);
   const isEuCountry = geo.country && EU_COUNTRY_CODES.includes(geo.country);
 
   // Get user agent data
   const ua = userAgentFromString(req.headers["user-agent"]);
   const referer = req.headers.referer;
   const refererDomain = referer ? getDomainWithoutWWW(referer) : "(direct)";
-
-  const ipAddress = getIpAddress(req.headers);
 
   const videoViewId = newId("videoView");
 

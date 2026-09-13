@@ -9,7 +9,8 @@ import sendNotification from "../api/notification-helper";
 import { sendLinkViewWebhook } from "../api/views/send-webhook-event";
 import { EU_COUNTRY_CODES } from "../constants";
 import { capitalize, getDomainWithoutWWW } from "../utils";
-import { LOCALHOST_GEO_DATA, LOCALHOST_IP } from "../utils/geo";
+import { lookupGeoFromIp } from "../utils/geo";
+import { getIpAddressFromHeaderGetter } from "../utils/ip";
 
 export async function recordLinkView({
   req,
@@ -40,21 +41,33 @@ export async function recordLinkView({
     return null;
   }
 
-  const ip = process.env.VERCEL === "1" ? ipAddress(req) : LOCALHOST_IP;
+  const ip =
+    process.env.VERCEL === "1"
+      ? ipAddress(req)
+      : getIpAddressFromHeaderGetter((name) => req.headers.get(name));
 
   // get continent, region & geolocation data
   // interesting, geolocation().region is Vercel's edge region – NOT the actual region
   // so we use the x-vercel-ip-country-region or geolocation().countryRegion to get the actual region
-  const { continent, region } =
+  //
+  // Off Vercel (self-hosted), there's no edge geolocation available, so look
+  // the visitor's real location up from their IP instead -- see
+  // lookupGeoFromIp's comment in lib/utils/geo.ts.
+  const selfHostedGeo =
     process.env.VERCEL === "1"
-      ? {
-          continent: req.headers.get("x-vercel-ip-continent"),
-          region: geolocation(req).countryRegion,
-        }
-      : LOCALHOST_GEO_DATA;
+      ? null
+      : await lookupGeoFromIp(typeof ip === "string" ? ip : "");
 
-  const geo =
-    process.env.VERCEL === "1" ? geolocation(req) : LOCALHOST_GEO_DATA;
+  const geo = process.env.VERCEL === "1" ? geolocation(req) : selfHostedGeo!;
+
+  const continent =
+    process.env.VERCEL === "1"
+      ? req.headers.get("x-vercel-ip-continent")
+      : (selfHostedGeo!.continent ?? null);
+  const region =
+    process.env.VERCEL === "1"
+      ? geolocation(req).countryRegion
+      : selfHostedGeo!.region;
 
   const isEuCountry = geo.country && EU_COUNTRY_CODES.includes(geo.country);
 

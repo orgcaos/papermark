@@ -4,7 +4,8 @@ import { getServerSession } from "next-auth/next";
 
 import prisma from "@/lib/prisma";
 import { CustomUser } from "@/lib/types";
-import { LOCALHOST_GEO_DATA, getGeoData } from "@/lib/utils/geo";
+import { getGeoData, lookupGeoFromIp } from "@/lib/utils/geo";
+import { getIpAddress } from "@/lib/utils/ip";
 import { getYearInReviewStats } from "@/lib/year-in-review/get-stats";
 
 import { authOptions } from "../../auth/[...nextauth]";
@@ -45,10 +46,13 @@ export default async function handler(
     }
 
     // Get user's geo data from request IP for distance calculation
-    const geo = getGeoData(req.headers);
+    const geo =
+      process.env.VERCEL === "1"
+        ? getGeoData(req.headers)
+        : await lookupGeoFromIp(getIpAddress(req.headers));
     const userGeo = {
-      latitude: geo.latitude || LOCALHOST_GEO_DATA.latitude,
-      longitude: geo.longitude || LOCALHOST_GEO_DATA.longitude,
+      latitude: geo.latitude || "Unknown",
+      longitude: geo.longitude || "Unknown",
     };
 
     const stats = await getYearInReviewStats(teamId, year, userGeo);

@@ -26,3 +26,26 @@ export function getIpAddress(headers: {
   // Fallback to localhost
   return "127.0.0.1";
 }
+
+/**
+ * Same extraction as getIpAddress, but for App Router request objects whose
+ * headers are a Headers instance (`.get(name)`) rather than a plain object --
+ * e.g. NextRequest in lib/tracking/record-link-view.ts.
+ */
+export function getIpAddressFromHeaderGetter(
+  get: (name: string) => string | null,
+): string {
+  const forwardedFor = get("x-forwarded-for");
+  if (forwardedFor) {
+    const ip = forwardedFor.split(",")[0]?.trim();
+    if (ip) return ip;
+  }
+
+  const realIp = get("x-real-ip");
+  if (realIp) {
+    const ip = realIp.trim();
+    if (ip) return ip;
+  }
+
+  return "127.0.0.1";
+}
