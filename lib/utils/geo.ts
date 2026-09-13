@@ -1,4 +1,5 @@
 import { Geo } from "../types";
+import { lookupGeoFromMaxmind } from "./maxmind-geo";
 
 export function getGeoData(headers: {
   [key: string]: string | string[] | undefined;
@@ -21,15 +22,6 @@ export function getGeoData(headers: {
       : headers["x-vercel-ip-longitude"],
   };
 }
-
-export const LOCALHOST_GEO_DATA = {
-  continent: "Europe",
-  city: "Munich",
-  region: "BY",
-  country: "DE",
-  latitude: "48.1371",
-  longitude: "11.5761",
-};
 
 export const LOCALHOST_IP = "127.0.0.1";
 
@@ -58,12 +50,15 @@ function isPrivateOrLoopbackIp(ip: string): boolean {
  * Self-hosted replacement for Vercel's edge geolocation. Vercel injects
  * x-vercel-ip-* headers at its CDN edge, which don't exist on a plain VPS
  * deploy -- this looks up the same information from the visitor's real IP
- * via ip-api.com's free, no-signup JSON endpoint instead.
+ * against a local GeoLite2 City database (via lib/utils/maxmind-geo.ts)
+ * instead. The visitor's IP never leaves this server: no third-party
+ * geolocation API is involved.
  *
- * Free tier is rate-limited (45 req/min per server IP) and HTTP-only, which
- * is fine for a server-to-server call with no browser involved. Any failure
- * (timeout, rate limit, private/loopback IP) degrades to "Unknown" fields --
- * never to a fake location.
+ * The database file itself isn't part of this repo -- it's downloaded and
+ * kept current on the server by MaxMind's official `geoipupdate` tool (see
+ * the deploy notes for setup). Any failure (database not downloaded yet,
+ * IP not found, private/loopback IP) degrades to "Unknown" fields -- never
+ * to a fake location.
  */
 export async function lookupGeoFromIp(ip: string): Promise<{
   continent?: string;
@@ -77,33 +72,6 @@ export async function lookupGeoFromIp(ip: string): Promise<{
     return UNKNOWN_GEO_DATA;
   }
 
-  try {
-    const response = await fetch(
-      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,continent,country,countryCode,regionName,city,lat,lon`,
-      { signal: AbortSignal.timeout(2500) },
-    );
-
-    if (!response.ok) {
-      throw new Error(`ip-api responded with ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.status !== "success") {
-      return UNKNOWN_GEO_DATA;
-    }
-
-    return {
-      continent: data.continent || undefined,
-      city: data.city || "Unknown",
-      region: data.regionName || "Unknown",
-      // Match Vercel's 2-letter country code format (e.g. "DE", "EE").
-      country: data.countryCode || "Unknown",
-      latitude: data.lat != null ? String(data.lat) : "Unknown",
-      longitude: data.lon != null ? String(data.lon) : "Unknown",
-    };
-  } catch (error) {
-    console.error("[geo] ip-api lookup failed, using Unknown", error);
-    return UNKNOWN_GEO_DATA;
-  }
+  const result = await lookupGeoFromMaxmind(ip);
+  return result ?? UNKNOWN_GEO_DATA;
 }
