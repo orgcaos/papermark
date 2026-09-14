@@ -800,7 +800,12 @@ export default function DocumentHeader({
                   const link = links[0];
                   setShareModalData({
                     url: getFullUrl(link),
-                    documentName: prismaDocument.name,
+                    title: link.name || `Link #${link.id.slice(-5)}`,
+                    fileName: ensureFileExtension({
+                      name: prismaDocument.name,
+                      contentType: primaryVersion.contentType,
+                      type: primaryVersion.type,
+                    }),
                     thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${prismaDocument.id}`,
                   });
                 }}

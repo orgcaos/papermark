@@ -28,6 +28,7 @@ import { useDomains } from "@/lib/swr/use-domains";
 import useLimits from "@/lib/swr/use-limits";
 import { LinkWithViews, WatermarkConfig } from "@/lib/types";
 import { convertDataUrlToFile, fetcher, uploadImage } from "@/lib/utils";
+import { ensureFileExtension } from "@/lib/utils/get-content-type";
 
 import { UpgradePlanModal } from "@/components/billing/upgrade-plan-modal";
 import {
@@ -676,7 +677,12 @@ export default function LinkSheet({
       if (linkType === LinkType.DOCUMENT_LINK && documentName) {
         setShareModalData({
           url: constructLinkUrl(returnedLink),
-          documentName,
+          title: returnedLink.name || `Link #${returnedLink.id.slice(-5)}`,
+          // No contentType/type is available in this component, so this
+          // only adds an extension when the document name already has one
+          // (ensureFileExtension() is a safe no-op otherwise) -- same
+          // behavior as the plain name shown here before this change.
+          fileName: ensureFileExtension({ name: documentName }),
           thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${targetId}`,
         });
       }

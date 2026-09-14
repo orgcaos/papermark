@@ -43,6 +43,7 @@ import { usePlan } from "@/lib/swr/use-billing";
 import useLimits from "@/lib/swr/use-limits";
 import { LinkWithViews, WatermarkConfig } from "@/lib/types";
 import { cn, copyToClipboard, nFormatter, timeAgo } from "@/lib/utils";
+import { ensureFileExtension } from "@/lib/utils/get-content-type";
 import { useMediaQuery } from "@/lib/utils/use-media-query";
 
 import { UpgradePlanModal } from "@/components/billing/upgrade-plan-modal";
@@ -835,7 +836,12 @@ export default function LinksTable({
                                 ? (l) =>
                                     setShareModalData({
                                       url: getFullUrl(l),
-                                      documentName,
+                                      title: l.name || `Link #${l.id.slice(-5)}`,
+                                      fileName: ensureFileExtension({
+                                        name: documentName,
+                                        contentType: primaryVersion?.contentType,
+                                        type: primaryVersion?.type,
+                                      }),
                                       thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${l.documentId}`,
                                     })
                                 : undefined

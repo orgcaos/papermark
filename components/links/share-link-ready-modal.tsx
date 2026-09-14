@@ -18,7 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 export type ShareLinkReadyModalData = {
   url: string;
-  documentName: string;
+  /** Bold heading -- the share link's own name, falling back to "Link #xxxxx" (same convention used everywhere else in the app, e.g. links-table.tsx's own row label). */
+  title: string;
+  /** Second line, shown as clickable text (not the raw URL) -- the document's file name, with its extension (via ensureFileExtension()). */
+  fileName: string;
   /** Absolute, publicly-reachable URL for the document's first-page thumbnail. */
   thumbnailUrl: string;
 };
@@ -26,10 +29,10 @@ export type ShareLinkReadyModalData = {
 /**
  * Shown right after creating a document share link. Gives the user two ways
  * to hand the link to someone: the plain URL, or a pre-built HTML "email
- * card" (thumbnail + title, all clickable) that pastes into Gmail/Apple Mail
- * compose as rich content instead of a raw link — this is what actually
- * drives clicks from an email, per Savvas's own reasoning for prioritizing
- * this feature.
+ * card" (thumbnail, link title, and a clickable file name, all pointing at
+ * the share link) that pastes into Gmail/Apple Mail compose as rich content
+ * instead of a raw link — this is what actually drives clicks from an
+ * email, per Savvas's own reasoning for prioritizing this feature.
  */
 export function ShareLinkReadyModal({
   data,
@@ -43,12 +46,12 @@ export function ShareLinkReadyModal({
 
   if (!data) return null;
 
-  const { url, documentName, thumbnailUrl } = data;
+  const { url, title, fileName, thumbnailUrl } = data;
 
   // Preview shown in the textarea below — kept as a plain hotlinked <img>
   // (short, human-readable) even though the actual clipboard copy inlines
   // the image as a data URI instead. See buildClipboardHtml().
-  const cardHtml = buildEmailCardHtml({ url, documentName, thumbnailUrl });
+  const cardHtml = buildEmailCardHtml({ url, title, fileName, thumbnailUrl });
 
   const handleCopyUrl = async () => {
     try {
@@ -71,10 +74,11 @@ export function ShareLinkReadyModal({
       // write for happening "too late" after the gesture.
       const htmlBlobPromise = buildClipboardHtmlBlob({
         url,
-        documentName,
+        title,
+        fileName,
         thumbnailUrl,
       });
-      const textBlob = new Blob([`${documentName}: ${url}`], {
+      const textBlob = new Blob([`${fileName}: ${url}`], {
         type: "text/plain",
       });
       // Writing both text/html and text/plain lets Gmail/Apple Mail's
@@ -170,29 +174,33 @@ export function ShareLinkReadyModal({
   );
 }
 
-// Horizontal card layout (thumbnail left, title + URL stacked on the
-// right) — matches the reference card Savvas asked to match (a HubSpot
-// Sales Documents email card), replacing the earlier stacked-vertical
-// layout (big centered thumbnail, title, separate "View document" link).
+// Horizontal card layout (thumbnail left, title + file name stacked on
+// the right) — matches the reference card Savvas asked to match (a HubSpot
+// Sales Documents email card). Title is the share link's own name (not the
+// document name), and the second line shows the file name as clickable
+// text instead of the raw URL -- both changed 2026-09-14 per Savvas's
+// feedback. Border uses the Orgcaos accent color, no shadow.
 function buildEmailCardHtml({
   url,
-  documentName,
+  title,
+  fileName,
   thumbnailUrl,
 }: {
   url: string;
-  documentName: string;
+  title: string;
+  fileName: string;
   thumbnailUrl: string;
 }) {
-  const escapedName = documentName.replace(/"/g, "&quot;");
-  const escapedUrl = url.replace(/"/g, "&quot;");
+  const escapedTitle = title.replace(/"/g, "&quot;");
+  const escapedFileName = fileName.replace(/"/g, "&quot;");
 
   return (
-    `<table style="max-width:400px;width:100%;border:1px solid #d8dee4;border-radius:8px;background-color:#ffffff" cellpadding="0" cellspacing="0"><tbody>` +
+    `<table style="max-width:400px;width:100%;border:1px solid #BB5E4E;border-radius:8px;background-color:#ffffff;box-shadow:none" cellpadding="0" cellspacing="0"><tbody>` +
     `<tr>` +
-    `<td style="width:88px;padding:12px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedName}" src="${thumbnailUrl}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:6px;border:0" /></a></td>` +
+    `<td style="width:88px;padding:12px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:6px;border:0" /></a></td>` +
     `<td style="padding:12px 16px 12px 0" valign="middle">` +
-    `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:bold;text-decoration:none">${escapedName}</a>` +
-    `<a href="${url}" target="_blank" style="display:block;margin-top:4px;color:#2563eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;text-decoration:underline;word-break:break-all">${escapedUrl}</a>` +
+    `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:bold;text-decoration:none">${escapedTitle}</a>` +
+    `<a href="${url}" target="_blank" style="display:block;margin-top:4px;color:#2563eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;text-decoration:underline;word-break:break-all">${escapedFileName}</a>` +
     `</td>` +
     `</tr>` +
     `</tbody></table>`
@@ -213,17 +221,20 @@ function buildEmailCardHtml({
 // the size of every pasted card with a full-resolution page render.
 async function buildClipboardHtmlBlob({
   url,
-  documentName,
+  title,
+  fileName,
   thumbnailUrl,
 }: {
   url: string;
-  documentName: string;
+  title: string;
+  fileName: string;
   thumbnailUrl: string;
 }): Promise<Blob> {
   const inlineThumbnail = await fetchThumbnailAsDataUrl(thumbnailUrl);
   const html = buildEmailCardHtml({
     url,
-    documentName,
+    title,
+    fileName,
     // Falls back to the hotlinked URL if inlining fails for any reason
     // (network hiccup, no thumbnail available for this document type) —
     // same behavior as before this fix, not a regression.
