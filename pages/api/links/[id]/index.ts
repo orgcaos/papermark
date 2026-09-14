@@ -568,9 +568,23 @@ export default async function handle(
       return res.status(404).json({ error: "Link not found" });
     }
 
-    await fetch(
-      `${process.env.NEXTAUTH_URL}/api/revalidate?secret=${process.env.REVALIDATE_TOKEN}&linkId=${id}&hasDomain=${updatedLink.domainId ? "true" : "false"}`,
-    );
+    // The DB write above already succeeded -- a revalidation hiccup here
+    // must not turn into a 500 for what was actually a successful save, and
+    // must not vanish silently either (that's what let a stale ISR page
+    // linger with pre-edit settings). Log it and keep going either way.
+    try {
+      const revalidateRes = await fetch(
+        `${process.env.NEXTAUTH_URL}/api/revalidate?secret=${process.env.REVALIDATE_TOKEN}&linkId=${id}&hasDomain=${updatedLink.domainId ? "true" : "false"}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (!revalidateRes.ok) {
+        console.error(
+          `Failed to revalidate link ${id} after update: HTTP ${revalidateRes.status}`,
+        );
+      }
+    } catch (revalidateError) {
+      console.error(`Failed to revalidate link ${id} after update:`, revalidateError);
+    }
 
     // Decrypt the password for the updated link
     if (updatedLink.password !== null) {

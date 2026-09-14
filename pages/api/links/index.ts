@@ -489,10 +489,25 @@ export default async function handler(
         }),
       );
 
-      // Revalidate the view page to pre-generate it
-      await fetch(
-        `${process.env.NEXTAUTH_URL}/api/revalidate?secret=${process.env.REVALIDATE_TOKEN}&linkId=${linkWithView.id}&hasDomain=${linkWithView.domainId ? "true" : "false"}`,
-      );
+      // Revalidate the view page to pre-generate it. The link was already
+      // created successfully above -- a revalidation hiccup must not fail
+      // the whole request, and must not disappear silently either.
+      try {
+        const revalidateRes = await fetch(
+          `${process.env.NEXTAUTH_URL}/api/revalidate?secret=${process.env.REVALIDATE_TOKEN}&linkId=${linkWithView.id}&hasDomain=${linkWithView.domainId ? "true" : "false"}`,
+          { signal: AbortSignal.timeout(5000) },
+        );
+        if (!revalidateRes.ok) {
+          console.error(
+            `Failed to revalidate link ${linkWithView.id} after create: HTTP ${revalidateRes.status}`,
+          );
+        }
+      } catch (revalidateError) {
+        console.error(
+          `Failed to revalidate link ${linkWithView.id} after create:`,
+          revalidateError,
+        );
+      }
 
       // Decrypt the password for the new link
       if (linkWithView.password !== null) {

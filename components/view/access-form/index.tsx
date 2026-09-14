@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { resolveBrandLogo } from "@/ee/features/branding/lib/brand-logo";
 import { Brand, CustomField, DataroomBrand, LinkType } from "@prisma/client";
-import { ArrowUpRightIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { stripTrailingPasswordWhitespace } from "@/lib/utils";
@@ -94,13 +93,6 @@ export default function AccessForm({
   );
   const { t } = useTranslation("access-form");
   const resolvedBrandLogo = resolveBrandLogo(brand);
-
-  // The server only leaves this set when the override actually applies.
-  const customPrivacyPolicyUrl =
-    brand && "privacyPolicyUrl" in brand ? brand.privacyPolicyUrl : null;
-  const privacyPolicyUrl =
-    customPrivacyPolicyUrl ||
-    `${process.env.NEXT_PUBLIC_MARKETING_URL}/privacy`;
 
   const isSigningAgreement =
     signingProvider === "DOCUMENSO" || agreementContentType === "SIGNING";
@@ -277,50 +269,6 @@ export default function AccessForm({
               </div>
             </form>
           </div>
-        </div>
-        <div className="flex flex-col items-center gap-0.5">
-          {!hideFooterOnAccessForm ? (
-            <p
-              className="text-center text-sm tracking-tight"
-              style={{ color: accessFormTheme.subtleTextColor }}
-            >
-              {linkType === "DATAROOM_LINK"
-                ? t(
-                    "footer.sharedSecurelyViaDataroom",
-                    "This data room is securely shared with you using",
-                  )
-                : t(
-                    "footer.sharedSecurelyVia",
-                    "This document is securely shared with you using",
-                  )}{" "}
-              <a
-                href="https://view.orgcaos.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium"
-                style={{ color: accessFormTheme.mutedTextColor }}
-              >
-                {t("footer.papermark", "Orgcaos Docket")}
-              </a>
-              .
-            </p>
-          ) : null}
-          <p
-            className="text-center text-sm tracking-tight"
-            style={{ color: accessFormTheme.subtleTextColor }}
-          >
-            {t("footer.seeHowWeProtect", "See how we protect your data in our")}{" "}
-            <a
-              href={privacyPolicyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5"
-              style={{ color: accessFormTheme.mutedTextColor }}
-            >
-              <span>{t("footer.privacyPolicy", "Privacy Policy")}</span>
-              <ArrowUpRightIcon className="h-3 w-3" />
-            </a>
-          </p>
         </div>
       </div>
     </AccessFormThemeProvider>
