@@ -170,6 +170,10 @@ export function ShareLinkReadyModal({
   );
 }
 
+// Horizontal card layout (thumbnail left, title + URL stacked on the
+// right) — matches the reference card Savvas asked to match (a HubSpot
+// Sales Documents email card), replacing the earlier stacked-vertical
+// layout (big centered thumbnail, title, separate "View document" link).
 function buildEmailCardHtml({
   url,
   documentName,
@@ -180,12 +184,17 @@ function buildEmailCardHtml({
   thumbnailUrl: string;
 }) {
   const escapedName = documentName.replace(/"/g, "&quot;");
+  const escapedUrl = url.replace(/"/g, "&quot;");
 
   return (
-    `<table style="max-width:400px;width:100%;border:solid 1px #1f2937;padding:8px;border-radius:2px" cellpadding="0" cellspacing="0"><tbody>` +
-    `<tr><td style="text-align:center"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedName}" src="${thumbnailUrl}" style="display:block;margin:0 auto;max-width:150px;max-height:150px;width:auto;height:auto;border-radius:4px;border:0" /></a></td></tr>` +
-    `<tr><td style="text-align:center;padding-top:8px"><a href="${url}" target="_blank" style="color:#1f2937;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;text-decoration:none">${escapedName}</a></td></tr>` +
-    `<tr><td style="text-align:center;padding-top:4px"><a href="${url}" target="_blank" style="color:#2563eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;text-decoration:underline">View document &#8594;</a></td></tr>` +
+    `<table style="max-width:400px;width:100%;border:1px solid #d8dee4;border-radius:8px;background-color:#ffffff" cellpadding="0" cellspacing="0"><tbody>` +
+    `<tr>` +
+    `<td style="width:88px;padding:12px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedName}" src="${thumbnailUrl}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:6px;border:0" /></a></td>` +
+    `<td style="padding:12px 16px 12px 0" valign="middle">` +
+    `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:bold;text-decoration:none">${escapedName}</a>` +
+    `<a href="${url}" target="_blank" style="display:block;margin-top:4px;color:#2563eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;text-decoration:underline;word-break:break-all">${escapedUrl}</a>` +
+    `</td>` +
+    `</tr>` +
     `</tbody></table>`
   );
 }
@@ -230,7 +239,7 @@ async function fetchThumbnailAsDataUrl(url: string): Promise<string | null> {
     const blob = await response.blob();
 
     const bitmap = await createImageBitmap(blob);
-    const maxDim = 300; // 2x the card's 150px display size, for retina
+    const maxDim = 144; // 2x the card's 72px display size, for retina
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
