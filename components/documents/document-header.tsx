@@ -19,6 +19,7 @@ import {
   FileSpreadsheetIcon,
   FolderIcon,
   FolderInputIcon,
+  MailIcon,
   MoonIcon,
   ScanEyeIcon,
   ServerIcon,
@@ -40,6 +41,7 @@ import { useTeamAI } from "@/lib/swr/use-team-ai";
 import {
   DocumentWithLinksAndLinkCountAndViewCount,
   DocumentWithVersion,
+  LinkWithViews,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -89,7 +91,6 @@ const RedactionConfigDialog = dynamic(
   { ssr: false },
 );
 import AdvancedSheet from "../shared/icons/advanced-sheet";
-import PortraitLandscape from "../shared/icons/portrait-landscape";
 import LoadingSpinner from "../ui/loading-spinner";
 import { ButtonTooltip } from "../ui/tooltip";
 import { AddDocumentModal } from "./add-document-modal";
@@ -97,6 +98,11 @@ import { AddToDataroomModal } from "./add-document-to-dataroom-modal";
 import AlertBanner from "./alert";
 import { ExportVisitsModal } from "./export-visits-modal";
 import { MoveToFolderModal } from "./move-folder-modal";
+import { getFullUrl } from "../links/links-table";
+import {
+  ShareLinkReadyModal,
+  type ShareLinkReadyModalData,
+} from "../links/share-link-ready-modal";
 
 export default function DocumentHeader({
   prismaDocument,
@@ -106,6 +112,7 @@ export default function DocumentHeader({
   onBulkImportLinks,
   dataroomId,
   dataroomDocumentId,
+  links,
 }: {
   prismaDocument: DocumentWithVersion;
   primaryVersion: DocumentVersion;
@@ -119,6 +126,8 @@ export default function DocumentHeader({
    */
   dataroomId?: string;
   dataroomDocumentId?: string;
+  /** Used for the title subtitles (share-link count) and the "Copy email card" button. */
+  links?: LinkWithViews[];
 }) {
   const router = useRouter();
   const teamInfo = useTeam();
@@ -139,7 +148,6 @@ export default function DocumentHeader({
   const [nameDraft, setNameDraft] = useState<string>("");
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [isFirstClick, setIsFirstClick] = useState<boolean>(false);
-  const [orientationLoading, setOrientationLoading] = useState<boolean>(false);
   const [addDataRoomOpen, setAddDataRoomOpen] = useState<boolean>(false);
   const [moveFolderOpen, setMoveFolderOpen] = useState<boolean>(false);
   const [addDocumentVersion, setAddDocumentVersion] = useState<boolean>(false);
@@ -151,6 +159,8 @@ export default function DocumentHeader({
   const [selectedPlan, setSelectedPlan] = useState<PlanEnum>(PlanEnum.Pro);
   const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
   const [aiDialogOpen, setAiDialogOpen] = useState<boolean>(false);
+  const [shareModalData, setShareModalData] =
+    useState<ShareLinkReadyModalData | null>(null);
   const skipNameSubmitRef = useRef<boolean>(false);
   const savingNameRef = useRef<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -414,44 +424,6 @@ export default function DocumentHeader({
       toast.error("Failed to enable AI agents. Please try again.");
     } finally {
       setEnablingAI(false);
-    }
-  };
-
-  const changeDocumentOrientation = async () => {
-    setOrientationLoading(true);
-    try {
-      const response = await fetch(
-        "/api/teams/" +
-          teamId +
-          "/documents/" +
-          prismaDocument.id +
-          "/change-orientation",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            versionId: primaryVersion.id,
-            isVertical: primaryVersion.isVertical ? false : true,
-          }),
-        },
-      );
-
-      if (response.ok) {
-        const { message } = await response.json();
-        toast.success(message);
-
-        mutate(`/api/teams/${teamId}/documents/${prismaDocument.id}`);
-      } else {
-        const { message } = await response.json();
-        toast.error(message);
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      toast.error("An error occurred. Please try again.");
-    } finally {
-      setOrientationLoading(false);
     }
   };
 
@@ -747,6 +719,32 @@ export default function DocumentHeader({
                 </button>
               </h2>
             )}
+            {!isEditingName &&
+              (typeof prismaDocument._count?.versions === "number" ||
+                typeof prismaDocument._count?.links === "number") && (
+                <div className="flex min-w-0 items-center gap-x-1.5 px-1 text-xs text-muted-foreground lg:px-3">
+                  {typeof prismaDocument._count?.versions === "number" && (
+                    <span className="truncate">
+                      {prismaDocument._count.versions}{" "}
+                      {prismaDocument._count.versions === 1
+                        ? "version"
+                        : "versions"}
+                    </span>
+                  )}
+                  {typeof prismaDocument._count?.versions === "number" &&
+                    typeof prismaDocument._count?.links === "number" && (
+                      <span aria-hidden>&middot;</span>
+                    )}
+                  {typeof prismaDocument._count?.links === "number" && (
+                    <span className="truncate">
+                      {prismaDocument._count.links}{" "}
+                      {prismaDocument._count.links === 1
+                        ? "share link"
+                        : "share links"}
+                    </span>
+                  )}
+                </div>
+              )}
           </div>
 
           {prismaDocument.type === "sheet" &&
@@ -770,34 +768,6 @@ export default function DocumentHeader({
 
         <div className="flex shrink-0 items-center gap-x-1 sm:gap-x-4 md:gap-x-2">
           {primaryVersion.type !== "notion" &&
-            primaryVersion.type !== "link" &&
-            primaryVersion.type !== "sheet" &&
-            primaryVersion.type !== "zip" &&
-            primaryVersion.type !== "video" &&
-            (!orientationLoading ? (
-              <ButtonTooltip content="Change orientation">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="hidden size-8 sm:flex lg:size-9"
-                  onClick={changeDocumentOrientation}
-                  title={`Change document orientation to ${primaryVersion.isVertical ? "landscape" : "portrait"}`}
-                >
-                  <PortraitLandscape
-                    className={cn(
-                      "h-6 w-6",
-                      !primaryVersion.isVertical && "-rotate-90 transform",
-                    )}
-                  />
-                </Button>
-              </ButtonTooltip>
-            ) : (
-              <div className="hidden md:flex">
-                <LoadingSpinner className="h-6 w-6" />
-              </div>
-            ))}
-
-          {primaryVersion.type !== "notion" &&
             primaryVersion.type !== "link" && (
               <AddDocumentModal
                 newVersion
@@ -820,6 +790,26 @@ export default function DocumentHeader({
                 </ButtonTooltip>
               </AddDocumentModal>
             )}
+
+          {links && links.length > 0 && (
+            <ButtonTooltip content="Copy email card">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  const link = links[0];
+                  setShareModalData({
+                    url: getFullUrl(link),
+                    documentName: prismaDocument.name,
+                    thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${prismaDocument.id}`,
+                  });
+                }}
+                className="hidden size-8 md:flex lg:size-9"
+              >
+                <MailIcon className="h-6 w-6" />
+              </Button>
+            </ButtonTooltip>
+          )}
 
           {/* AI Agents Button */}
           {isAIEnabled &&
@@ -1276,6 +1266,11 @@ export default function DocumentHeader({
           onClose={() => setExportModalOpen(false)}
         />
       )}
+
+      <ShareLinkReadyModal
+        data={shareModalData}
+        onClose={() => setShareModalData(null)}
+      />
 
       {/* AI Agents Dialog */}
       <DocumentAIDialog

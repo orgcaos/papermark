@@ -25,9 +25,6 @@ export default function DocumentTreePage() {
             <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
               All Documents
             </h2>
-            <p className="text-xs text-muted-foreground sm:text-sm">
-              Manage all your documents in one place.
-            </p>
           </div>
           <div className="flex items-center gap-x-2">
             <AddDocumentDropdown variant="split" />

@@ -76,9 +76,15 @@ export async function validateExternalDocumentUrl({
     try {
       const parsed = new URL(key);
 
-      // Skip keyword check for trusted teams
+      // Skip keyword check for trusted teams, and skip it entirely when no
+      // Edge Config is configured (e.g. this self-hosted deployment) --
+      // @vercel/edge-config's `get()` throws when EDGE_CONFIG isn't set,
+      // which previously got caught below and surfaced as a misleading
+      // "Invalid URL format for link document" error on every weblink
+      // upload, regardless of the URL entered. isTrustedTeam already
+      // no-ops the same way for the same reason.
       const trusted = await isTrustedTeam(teamId);
-      if (!trusted) {
+      if (!trusted && process.env.EDGE_CONFIG) {
         const keywords = await get("keywords");
         if (Array.isArray(keywords) && keywords.length > 0) {
           const matchedKeyword = keywords.find(

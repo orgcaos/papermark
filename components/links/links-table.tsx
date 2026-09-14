@@ -12,7 +12,6 @@ import { isWithinInterval, subMinutes } from "date-fns";
 import {
   ArrowRightLeftIcon,
   BoxesIcon,
-  ChevronRightIcon,
   ClockFadingIcon,
   Code2Icon,
   CopyCheckIcon,
@@ -119,7 +118,7 @@ const isDocumentProcessing = (version?: DocumentVersion) => {
 };
 
 // Full URL helper
-const getFullUrl = (link: LinkWithViews) => {
+export const getFullUrl = (link: LinkWithViews) => {
   if (link.domainId) {
     return `https://${link.domainSlug}/${link.slug}`;
   }
@@ -197,6 +196,7 @@ const LinkActionsCell = ({
   onCopy,
   onPreview,
   onInvite,
+  onShareCard,
   isProcessing,
   isDataroom,
   canInvite,
@@ -205,6 +205,8 @@ const LinkActionsCell = ({
   onCopy: (url: string) => void;
   onPreview: (link: LinkWithViews) => void;
   onInvite?: (link: LinkWithViews) => void;
+  /** DOCUMENT links only -- opens the "copy email card" modal for this link. */
+  onShareCard?: (link: LinkWithViews) => void;
   isProcessing: boolean;
   isDataroom?: boolean;
   canInvite?: boolean;
@@ -236,6 +238,12 @@ const LinkActionsCell = ({
     e.stopPropagation();
     e.preventDefault();
     onInvite?.(link);
+  };
+
+  const handleShareCard = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onShareCard?.(link);
   };
 
   return (
@@ -271,6 +279,18 @@ const LinkActionsCell = ({
           )}
         </Button>
       </ButtonTooltip>
+      {onShareCard && (
+        <ButtonTooltip content="Copy email card">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 hover:text-foreground"
+            onClick={handleShareCard}
+          >
+            <MailIcon className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+          </Button>
+        </ButtonTooltip>
+      )}
       {isDataroom && canInvite && (
         <ButtonTooltip content="Invite via email">
           <Button
@@ -695,36 +715,6 @@ export default function LinksTable({
     [processedLinks],
   );
 
-  // Collapsible state for "All Links" section (document pages only)
-  const ALL_LINKS_COLLAPSED_KEY = "papermark-all-links-collapsed";
-  const [isAllLinksOpen, setIsAllLinksOpen] = useState<boolean>(true);
-
-  // Load collapse state from localStorage on mount
-  useEffect(() => {
-    if (targetType !== "DOCUMENT") return;
-    try {
-      const stored = localStorage.getItem(ALL_LINKS_COLLAPSED_KEY);
-      if (stored !== null) {
-        // stored value is "true" if collapsed, so we invert for isOpen
-        setIsAllLinksOpen(stored !== "true");
-      }
-    } catch (e) {
-      // localStorage might be unavailable
-      console.warn("Could not read from localStorage:", e);
-    }
-  }, [targetType]);
-
-  // Handle toggle and persist to localStorage
-  const handleAllLinksToggle = useCallback((open: boolean) => {
-    setIsAllLinksOpen(open);
-    try {
-      // Store "true" when collapsed, "false" when expanded
-      localStorage.setItem(ALL_LINKS_COLLAPSED_KEY, String(!open));
-    } catch (e) {
-      console.warn("Could not write to localStorage:", e);
-    }
-  }, []);
-
   const isDataroom = targetType === "DATAROOM";
 
   const linksTableContent = (
@@ -838,6 +828,18 @@ export default function LinksTable({
                             onCopy={handleCopyToClipboard}
                             onPreview={handlePreviewLink}
                             onInvite={handleSendInvitations}
+                            onShareCard={
+                              targetType === "DOCUMENT" &&
+                              documentName &&
+                              link.documentId
+                                ? (l) =>
+                                    setShareModalData({
+                                      url: getFullUrl(l),
+                                      documentName,
+                                      thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${l.documentId}`,
+                                    })
+                                : undefined
+                            }
                             isProcessing={isDocumentProcessing(primaryVersion)}
                             isDataroom={isDataroom}
                             canInvite={canInviteViewers}
@@ -1076,22 +1078,6 @@ export default function LinksTable({
                             <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
                             Transfer Link
                           </DropdownMenuItem>
-                          {targetType === "DOCUMENT" &&
-                            documentName &&
-                            link.documentId && (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  setShareModalData({
-                                    url: getFullUrl(link),
-                                    documentName,
-                                    thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${link.documentId}`,
-                                  })
-                                }
-                              >
-                                <MailIcon className="mr-2 h-4 w-4" />
-                                Copy Email Card
-                              </DropdownMenuItem>
-                            )}
                           <DropdownMenuItem
                             onClick={() => {
                               setSelectedEmbedLink({
@@ -1167,39 +1153,17 @@ export default function LinksTable({
   return (
     <>
       <div className="w-full">
-        {/* Collapsible wrapper for DOCUMENT type, plain div for DATAROOM */}
-        {targetType === "DOCUMENT" ? (
-          <Collapsible
-            open={isAllLinksOpen}
-            onOpenChange={handleAllLinksToggle}
-            className="w-full"
-          >
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="mb-2 flex w-full cursor-pointer items-center gap-2 text-left md:mb-4"
-              >
-                <ChevronRightIcon
-                  className={cn(
-                    "h-5 w-5 text-muted-foreground transition-transform duration-200",
-                    isAllLinksOpen && "rotate-90",
-                  )}
-                />
-                <h2 className="m-0">All links</h2>
-                {processedLinks && processedLinks.length > 0 && (
-                  <Badge variant="outline" className="text-muted-foreground">
-                    {processedLinks.length}
-                  </Badge>
-                )}
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
-              {linksTableContent}
-            </CollapsibleContent>
-          </Collapsible>
-        ) : (
-          linksTableContent
+        {targetType === "DOCUMENT" && (
+          <div className="mb-2 flex w-full items-center gap-2 md:mb-4">
+            <h2 className="m-0">All links</h2>
+            {processedLinks && processedLinks.length > 0 && (
+              <Badge variant="outline" className="text-muted-foreground">
+                {processedLinks.length}
+              </Badge>
+            )}
+          </div>
         )}
+        {linksTableContent}
 
         {targetType === "DATAROOM" ? (
           <>

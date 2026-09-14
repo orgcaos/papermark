@@ -347,6 +347,25 @@ export const formatDate = (dateString: string, updateDate?: boolean) => {
   });
 };
 
+// "11 SEP 2026" style -- day, short uppercase month, year, all computed in
+// UTC so the three parts never straddle a local-timezone date rollover.
+export const formatShortDate = (
+  timestamp?: Date | string | number,
+): string => {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).formatToParts(date);
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value.toUpperCase() ?? "";
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  return `${day} ${month} ${year}`;
+};
+
 export const nanoid = customAlphabet(
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
   7,

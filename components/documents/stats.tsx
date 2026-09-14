@@ -60,15 +60,15 @@ export const StatsComponent = ({
         </Label>
       </div>
 
+      {/* Stats Card */}
+      <StatsCard statsData={statsData} />
+
       {/* Stats Chart */}
       <StatsChart
         documentId={documentId}
         totalPagesMax={numPages}
         statsData={statsData}
       />
-
-      {/* Stats Card */}
-      <StatsCard statsData={statsData} />
     </>
   );
 };

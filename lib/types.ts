@@ -40,6 +40,11 @@ export interface DocumentWithLinksAndLinkCountAndViewCount extends Document {
 
 export interface DocumentWithVersion extends Document {
   versions: DocumentVersion[];
+  _count?: {
+    links: number;
+    views: number;
+    versions?: number;
+  };
   folder: {
     name: string;
     path: string;

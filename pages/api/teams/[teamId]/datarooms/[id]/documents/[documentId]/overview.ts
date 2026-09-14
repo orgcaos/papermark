@@ -162,6 +162,7 @@ export default async function handle(
               select: {
                 links: true,
                 views: { where: { isArchived: false } },
+                versions: true,
               },
             },
           },

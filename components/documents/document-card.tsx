@@ -25,7 +25,7 @@ import { mutate } from "swr";
 import useDataroomsSimple from "@/lib/swr/use-datarooms-simple";
 import useLimits from "@/lib/swr/use-limits";
 import { DocumentWithLinksAndLinkCountAndViewCount } from "@/lib/types";
-import { cn, getBreadcrumbPath, nFormatter, timeAgo } from "@/lib/utils";
+import { cn, formatShortDate, getBreadcrumbPath, nFormatter } from "@/lib/utils";
 import { fileIcon } from "@/lib/utils/get-file-icon";
 import { useCopyToClipboard } from "@/lib/utils/use-copy-to-clipboard";
 
@@ -78,6 +78,7 @@ export default function DocumentsCard({
   const [trialModalOpen, setTrialModalOpen] = useState<boolean>(false);
   const [planModalOpen, setPlanModalOpen] = useState<boolean>(false);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState<boolean>(false);
 
   const { datarooms } = useDataroomsSimple();
 
@@ -316,12 +317,22 @@ export default function DocumentsCard({
       >
         <div className="flex min-w-0 flex-1 shrink items-center space-x-2 sm:space-x-4">
           {!isSelected && !isHovered ? (
-            <div className="mx-0.5 flex w-8 shrink-0 items-center justify-center text-center sm:mx-1">
-              {fileIcon({
-                fileType: prismaDocument.type ?? "",
-                className: "h-8 w-8",
-                isLight,
-              })}
+            <div className="relative mx-0.5 flex h-10 w-8 shrink-0 items-center justify-center overflow-hidden rounded text-center sm:mx-1 sm:h-12 sm:w-10">
+              {!thumbnailFailed ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/public/thumbnail/${prismaDocument.id}`}
+                  alt=""
+                  className="h-full w-full rounded object-cover"
+                  onError={() => setThumbnailFailed(true)}
+                />
+              ) : (
+                fileIcon({
+                  fileType: prismaDocument.type ?? "",
+                  className: "h-8 w-8",
+                  isLight,
+                })
+              )}
             </div>
           ) : (
             <div className="mx-0.5 w-8 shrink-0 sm:mx-1"></div>
@@ -341,6 +352,11 @@ export default function DocumentsCard({
                   />
                 </Link>
               </h2>
+              {prismaDocument.type && (
+                <span className="shrink-0 truncate text-[10px] font-medium uppercase text-muted-foreground">
+                  {prismaDocument.type}
+                </span>
+              )}
               {prismaDocument._count.datarooms > 0 && (
                 <div className="z-20 shrink-0">
                   <BadgeTooltip
@@ -353,7 +369,7 @@ export default function DocumentsCard({
               )}
             </div>
             <div className="mt-1 flex min-w-0 items-center space-x-1 overflow-hidden text-xs leading-5 text-muted-foreground">
-              <p className="truncate">{timeAgo(prismaDocument.createdAt)}</p>
+              <p className="truncate">{formatShortDate(prismaDocument.createdAt)}</p>
               <p>•</p>
               <p className="truncate">
                 {prismaDocument._count.links}{" "}

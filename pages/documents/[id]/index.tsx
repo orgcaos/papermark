@@ -52,18 +52,6 @@ const VideoAnalytics = dynamic(
   },
 );
 
-const VisitorsTable = dynamic(
-  () => import("@/components/visitors/visitors-table"),
-  {
-    loading: () => (
-      <div className="flex h-64 animate-pulse items-center justify-center rounded-lg bg-gray-100">
-        <LoadingSpinner className="h-6 w-6" />
-      </div>
-    ),
-    ssr: false,
-  },
-);
-
 const BulkImportLinksModal = dynamic(
   () =>
     import("@/components/links/bulk-import-modal").then((mod) => ({
@@ -162,6 +150,7 @@ export default function DocumentPage() {
           primaryVersion={primaryVersion}
           prismaDocument={prismaDocument}
           teamId={teamId}
+          links={links}
           onBulkImportLinks={() => setIsBulkImportOpen(true)}
           actions={[
             <NotionAccessibilityIndicator
@@ -240,12 +229,6 @@ export default function DocumentPage() {
               mutateDocument={mutateDocument}
               onBulkImportOpen={() => setIsBulkImportOpen(true)}
               documentName={prismaDocument.name}
-            />
-
-            {/* Visitors - Always show */}
-            <VisitorsTable
-              primaryVersion={primaryVersion}
-              isVideo={primaryVersion.type === "video"}
             />
           </>
         </Suspense>
