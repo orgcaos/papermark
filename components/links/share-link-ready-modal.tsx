@@ -26,9 +26,10 @@ export type ShareLinkReadyModalData = {
 /**
  * Shown right after creating a document share link. Gives the user two ways
  * to hand the link to someone: the plain URL, or a pre-built HTML "email
- * card" (thumbnail + title, all clickable) that pastes into Gmail compose as
- * rich content instead of a raw link — this is what actually drives clicks
- * from an email, per Savvas's own reasoning for prioritizing this feature.
+ * card" (thumbnail + title, all clickable) that pastes into Gmail/Apple Mail
+ * compose as rich content instead of a raw link — this is what actually
+ * drives clicks from an email, per Savvas's own reasoning for prioritizing
+ * this feature.
  */
 export function ShareLinkReadyModal({
   data,
@@ -44,6 +45,9 @@ export function ShareLinkReadyModal({
 
   const { url, documentName, thumbnailUrl } = data;
 
+  // Preview shown in the textarea below — kept as a plain hotlinked <img>
+  // (short, human-readable) even though the actual clipboard copy inlines
+  // the image as a data URI instead. See buildClipboardHtml().
   const cardHtml = buildEmailCardHtml({ url, documentName, thumbnailUrl });
 
   const handleCopyUrl = async () => {
@@ -59,21 +63,31 @@ export function ShareLinkReadyModal({
 
   const handleCopyFormatted = async () => {
     try {
-      const htmlBlob = new Blob([cardHtml], { type: "text/html" });
+      // The HTML value can be a Promise<Blob> — both Chrome and Safari/
+      // WebKit resolve it while keeping the write() call itself tied to
+      // this click's user-activation, which is what lets an async step
+      // (fetching + inlining the thumbnail below) run before the actual
+      // clipboard write completes, without either browser rejecting the
+      // write for happening "too late" after the gesture.
+      const htmlBlobPromise = buildClipboardHtmlBlob({
+        url,
+        documentName,
+        thumbnailUrl,
+      });
       const textBlob = new Blob([`${documentName}: ${url}`], {
         type: "text/plain",
       });
-      // Writing both text/html and text/plain lets Gmail's rich-content
-      // compose box render the card, while anything that only accepts
-      // plain text still gets a sensible fallback.
+      // Writing both text/html and text/plain lets Gmail/Apple Mail's
+      // rich-content compose box render the card, while anything that
+      // only accepts plain text still gets a sensible fallback.
       await navigator.clipboard.write([
         new ClipboardItem({
-          "text/html": htmlBlob,
+          "text/html": htmlBlobPromise,
           "text/plain": textBlob,
         }),
       ]);
       setFormattedCopied(true);
-      toast.success("Formatted card copied — paste into Gmail compose");
+      toast.success("Formatted card copied — paste into Gmail or Mail");
       setTimeout(() => setFormattedCopied(false), 2000);
     } catch (error) {
       toast.error(
@@ -88,7 +102,7 @@ export function ShareLinkReadyModal({
         <DialogHeader>
           <DialogTitle>Share link ready</DialogTitle>
           <DialogDescription>
-            Copy the URL or paste the rich card directly into Gmail.
+            Copy the URL or paste the rich card directly into Gmail or Mail.
           </DialogDescription>
         </DialogHeader>
 
@@ -142,8 +156,8 @@ export function ShareLinkReadyModal({
             />
             <p className="text-xs text-muted-foreground">
               Click <span className="font-medium">Copy formatted</span> then
-              paste into Gmail compose — it&apos;ll render as the deck card,
-              not raw HTML.
+              paste into Gmail or Apple Mail compose — it&apos;ll render as
+              the deck card, not raw HTML.
             </p>
           </div>
         </div>
@@ -174,4 +188,59 @@ function buildEmailCardHtml({
     `<tr><td style="text-align:center;padding-top:4px"><a href="${url}" target="_blank" style="color:#2563eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;text-decoration:underline">View document &#8594;</a></td></tr>` +
     `</tbody></table>`
   );
+}
+
+// Apple Mail (and, to a lesser extent, Gmail) blocks remote-hosted <img>
+// content by default — Mail's "Protect Mail Activity" / "Block All Remote
+// Content" privacy setting has been on by default since macOS Monterey, and
+// it blocks any image loaded from a remote URL, including one referenced in
+// pasted HTML, not just images in received mail. A hotlinked thumbnail URL
+// is therefore invisible for a large share of recipients by default.
+//
+// Fixed by inlining the thumbnail as a base64 data: URI at copy time, so the
+// picture is part of the clipboard payload itself and doesn't depend on any
+// mail client fetching anything. Downscaled to a small on-screen size first
+// (the card only ever displays it at max 150x150) so this doesn't balloon
+// the size of every pasted card with a full-resolution page render.
+async function buildClipboardHtmlBlob({
+  url,
+  documentName,
+  thumbnailUrl,
+}: {
+  url: string;
+  documentName: string;
+  thumbnailUrl: string;
+}): Promise<Blob> {
+  const inlineThumbnail = await fetchThumbnailAsDataUrl(thumbnailUrl);
+  const html = buildEmailCardHtml({
+    url,
+    documentName,
+    // Falls back to the hotlinked URL if inlining fails for any reason
+    // (network hiccup, no thumbnail available for this document type) —
+    // same behavior as before this fix, not a regression.
+    thumbnailUrl: inlineThumbnail ?? thumbnailUrl,
+  });
+  return new Blob([html], { type: "text/html" });
+}
+
+async function fetchThumbnailAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+
+    const bitmap = await createImageBitmap(blob);
+    const maxDim = 300; // 2x the card's 150px display size, for retina
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch (error) {
+    console.error("Failed to inline email-card thumbnail", error);
+    return null;
+  }
 }
