@@ -131,7 +131,7 @@ const getDisplayUrl = (link: LinkWithViews) => {
   if (link.domainId) {
     return `${link.domainSlug}/${link.slug}`;
   }
-  return `papermark.com/view/${link.id}`;
+  return `${process.env.NEXT_PUBLIC_APP_BASE_HOST}/view/${link.id}`;
 };
 
 // Link URL cell component - displays URL with click-to-copy hover overlay

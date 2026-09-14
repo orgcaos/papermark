@@ -25,7 +25,6 @@ import ExpirationSection from "@/components/links/link-sheet/expiration-section"
 import FeedbackSection from "@/components/links/link-sheet/feedback-section";
 import OGSection from "@/components/links/link-sheet/og-section";
 import PasswordSection from "@/components/links/link-sheet/password-section";
-import { ProBannerSection } from "@/components/links/link-sheet/pro-banner-section";
 import {
   Collapsible,
   CollapsibleContent,
@@ -360,18 +359,6 @@ export const LinkOptions = ({
             handleUpgradeStateChange={handleUpgradeStateChange}
             editLink={editLink ?? false}
             presets={currentPreset}
-          />
-          <ProBannerSection
-            {...{ data, setData }}
-            isAllowed={
-              isTrial ||
-              isPro ||
-              isBusiness ||
-              isDatarooms ||
-              isDataroomsPlus ||
-              isStarter
-            }
-            handleUpgradeStateChange={handleUpgradeStateChange}
           />
         </div>
       </CollapsibleSection>

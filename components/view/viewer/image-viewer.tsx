@@ -567,8 +567,6 @@ export default function ImageViewer({
         {showFullscreenOverlay ? (
           <FullscreenControls
             controlsVisible={controlsVisible}
-            showRotate
-            onRotate={rotate}
             onExit={toggleFullscreen}
           />
         ) : null}

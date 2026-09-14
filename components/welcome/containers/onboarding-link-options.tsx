@@ -23,7 +23,6 @@ import ExpirationSection from "@/components/links/link-sheet/expiration-section"
 import FeedbackSection from "@/components/links/link-sheet/feedback-section";
 import OGSection from "@/components/links/link-sheet/og-section";
 import PasswordSection from "@/components/links/link-sheet/password-section";
-import { ProBannerSection } from "@/components/links/link-sheet/pro-banner-section";
 import QuestionSection from "@/components/links/link-sheet/question-section";
 import ScreenshotProtectionSection from "@/components/links/link-sheet/screenshot-protection-section";
 import UploadSection from "@/components/links/link-sheet/upload-section";
@@ -248,20 +247,6 @@ export const OnboardingLinkOptions = ({
         handleUpgradeStateChange={handleUpgradeStateChange}
         presets={currentPreset}
       />
-      {linkType === LinkType.DOCUMENT_LINK ? (
-        <ProBannerSection
-          {...{ data, setData }}
-          isAllowed={
-            isTrial ||
-            isPro ||
-            isBusiness ||
-            isDatarooms ||
-            isDataroomsPlus ||
-            isStarter
-          }
-          handleUpgradeStateChange={handleUpgradeStateChange}
-        />
-      ) : null}
     </>
   );
 

@@ -31,7 +31,6 @@ import ExpirationInSection from "@/components/links/link-sheet/expirationIn-sect
 import { LinkUpgradeOptions } from "@/components/links/link-sheet/link-options";
 import OGSection from "@/components/links/link-sheet/og-section";
 import PasswordSection from "@/components/links/link-sheet/password-section";
-import { ProBannerSection } from "@/components/links/link-sheet/pro-banner-section";
 import ScreenshotProtectionSection from "@/components/links/link-sheet/screenshot-protection-section";
 import WatermarkSection from "@/components/links/link-sheet/watermark-section";
 import Preview from "@/components/settings/og-preview";
@@ -319,21 +318,6 @@ export default function NewPreset() {
                 />
               </div>
 
-              <div className="rounded-lg border p-6">
-                <h3 className="mb-4 text-lg font-medium">Branding</h3>
-                <ProBannerSection
-                  data={data}
-                  setData={setData}
-                  isAllowed={
-                    isTrial ||
-                    (isPro && allowAdvancedLinkControls) ||
-                    isBusiness ||
-                    isDatarooms ||
-                    isDataroomsPlus
-                  }
-                  handleUpgradeStateChange={handleUpgradeStateChange}
-                />
-              </div>
             </div>
 
             <div className="sticky top-0 md:overflow-auto">

@@ -1070,8 +1070,6 @@ export default function PagesHorizontalViewer({
           {showFullscreenOverlay ? (
             <FullscreenControls
               controlsVisible={controlsVisible}
-              showRotate
-              onRotate={rotate}
               onExit={toggleFullscreen}
             />
           ) : null}

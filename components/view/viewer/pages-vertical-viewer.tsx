@@ -1225,8 +1225,6 @@ export default function PagesVerticalViewer({
             viewer. */}
         {showFullscreenOverlay ? (
           <FullscreenControls
-            showRotate
-            onRotate={rotate}
             onExit={toggleFullscreen}
           />
         ) : null}
