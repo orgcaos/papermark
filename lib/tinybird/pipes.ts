@@ -153,7 +153,12 @@ export const getPageDurationsBatch = tb.buildPipe({
   }),
   data: z.object({
     viewId: z.string(),
-    pageNumber: z.number(),
+    // Tinybird returns this as a string, same as every other pipe here
+    // (get_total_average_page_duration, get_page_duration_per_view) --
+    // z.number() here was wrong and made every row fail validation,
+    // silently defeating this pipe's whole reason for existing (see the
+    // fallback comment at its call site in views/index.ts).
+    pageNumber: z.string(),
     sum_duration: z.number(),
   }),
 });

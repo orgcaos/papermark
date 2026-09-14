@@ -131,7 +131,7 @@ async function getDocumentViews(views: ViewWithExtras[], document: Document) {
       });
       for (const row of pageData.data ?? []) {
         const rows = pageRowsByViewId.get(row.viewId) ?? [];
-        rows.push({ pageNumber: row.pageNumber, sum_duration: row.sum_duration });
+        rows.push({ pageNumber: Number(row.pageNumber), sum_duration: row.sum_duration });
         pageRowsByViewId.set(row.viewId, rows);
       }
     } catch (error) {
