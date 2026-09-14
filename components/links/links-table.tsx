@@ -24,6 +24,7 @@ import {
   FileSlidersIcon,
   FileSpreadsheetIcon,
   LinkIcon,
+  MailIcon,
   RefreshCwIcon,
   SendIcon,
   Settings2Icon,
@@ -95,6 +96,10 @@ import LinkSheet, {
 import { DataroomLinkSheet } from "./link-sheet/dataroom-link-sheet";
 import { TagColumn } from "./link-sheet/tags/tag-details";
 import LinksVisitors from "./links-visitors";
+import {
+  ShareLinkReadyModal,
+  type ShareLinkReadyModalData,
+} from "./share-link-ready-modal";
 import { useTransferLinkModal } from "./transfer-link-modal";
 
 const BulkImportLinksModal = dynamic(
@@ -288,6 +293,7 @@ export default function LinksTable({
   primaryVersion,
   mutateDocument,
   dataroomName,
+  documentName,
   onBulkImportOpen,
 }: {
   targetType: "DOCUMENT" | "DATAROOM";
@@ -295,6 +301,8 @@ export default function LinksTable({
   primaryVersion?: DocumentVersion;
   mutateDocument?: () => void;
   dataroomName?: string;
+  /** Document display name -- enables the "Copy Email Card" action (DOCUMENT links only). */
+  documentName?: string;
   onBulkImportOpen?: () => void;
 }) {
   const [tags, _] = useQueryState<string[]>("tags", {
@@ -308,6 +316,8 @@ export default function LinksTable({
   const router = useRouter();
   const { isFree, isTrial, isDatarooms, isDataroomsPlus } = usePlan();
   const { currentTeamId } = useTeam();
+  const [shareModalData, setShareModalData] =
+    useState<ShareLinkReadyModalData | null>(null);
   const { id: targetId, groupId } = router.query as {
     id: string;
     groupId?: string;
@@ -1066,6 +1076,22 @@ export default function LinksTable({
                             <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
                             Transfer Link
                           </DropdownMenuItem>
+                          {targetType === "DOCUMENT" &&
+                            documentName &&
+                            link.documentId && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setShareModalData({
+                                    url: getFullUrl(link),
+                                    documentName,
+                                    thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${link.documentId}`,
+                                  })
+                                }
+                              >
+                                <MailIcon className="mr-2 h-4 w-4" />
+                                Copy Email Card
+                              </DropdownMenuItem>
+                            )}
                           <DropdownMenuItem
                             onClick={() => {
                               setSelectedEmbedLink({
@@ -1268,6 +1294,10 @@ export default function LinksTable({
 
         <DeleteLinkModal />
         <TransferLinkModal />
+        <ShareLinkReadyModal
+          data={shareModalData}
+          onClose={() => setShareModalData(null)}
+        />
       </div>
     </>
   );

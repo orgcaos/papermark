@@ -239,6 +239,7 @@ export default function DocumentPage() {
               primaryVersion={primaryVersion}
               mutateDocument={mutateDocument}
               onBulkImportOpen={() => setIsBulkImportOpen(true)}
+              documentName={prismaDocument.name}
             />
 
             {/* Visitors - Always show */}
