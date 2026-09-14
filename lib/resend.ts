@@ -47,8 +47,14 @@ export const sendEmail = async ({
   const html = await render(react);
   const plainText = toPlainText(html);
 
+  // Off the original Papermark SaaS, none of the papermark.com/verify./updates.
+  // subdomains below are verified in our Resend account, so any of these
+  // defaults being hit (no explicit `from` passed in) will fail to send.
+  // Fall back to our own verified sender (RESEND_FROM_EMAIL) first, and only
+  // drop to the upstream Papermark addresses if that isn't set either.
   const fromAddress =
     from ??
+    process.env.RESEND_FROM_EMAIL ??
     (marketing
       ? "Marc from Papermark <marc@updates.papermark.com>"
       : system
