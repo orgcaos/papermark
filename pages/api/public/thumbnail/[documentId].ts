@@ -24,6 +24,18 @@ export default async function handle(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  // Wide open deliberately, same reasoning as the endpoint's own doc
+  // comment above ("can be hotlinked from anywhere") and the same pattern
+  // orgcaos-hubspot's own public /api/templates route uses: this is a
+  // public, unauthenticated, unguessable-ID-gated endpoint, so there's no
+  // origin to meaningfully restrict to. Needed for callers that `fetch()`
+  // this cross-origin (rather than just using it as an <img src>, which
+  // never needed CORS) to inline the bytes themselves — e.g. the Email
+  // Cards feature in orgcaos-hubspot fetching this to embed the thumbnail
+  // as a base64 data: URI in a copied email card, since Apple Mail blocks
+  // hotlinked <img> content by default.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   if (req.method !== "GET") {
     res.status(405).json({ message: "Method Not Allowed" });
     return;
