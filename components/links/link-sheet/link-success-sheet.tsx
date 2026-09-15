@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { LinkWithViews } from "@/lib/types";
-
+import { constructLinkUrl } from "@/lib/utils/link-url";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,10 +50,7 @@ export default function LinkSuccessSheet({
 }: LinkSuccessSheetProps) {
   const [copied, setCopied] = useState(false);
 
-  const linkUrl =
-    link.domainId && link.slug
-      ? `https://${link.domainSlug}/${link.slug}`
-      : `${process.env.NEXT_PUBLIC_MARKETING_URL}/view/${link.id}`;
+  const linkUrl = constructLinkUrl(link);
 
   const copyToClipboard = async () => {
     try {

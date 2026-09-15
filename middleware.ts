@@ -96,6 +96,7 @@ export default async function middleware(req: NextRequest, ev: NextFetchEvent) {
   // Handle standard papermark.com paths
   if (
     !path.startsWith("/view/") &&
+    !path.startsWith("/l/") &&
     !path.startsWith("/verify") &&
     !path.startsWith("/unsubscribe") &&
     !path.startsWith("/notification-preferences") &&
@@ -104,9 +105,11 @@ export default async function middleware(req: NextRequest, ev: NextFetchEvent) {
     return AppMiddleware(req);
   }
 
-  // Check for blocked pathnames in view routes
+  // Check for blocked pathnames in view routes (/view/[linkId] and its
+  // pretty-URL sibling /l/[shortSlug] carry the same public, unauthenticated
+  // viewer surface, so both get the same guard)
   if (
-    path.startsWith("/view/") &&
+    (path.startsWith("/view/") || path.startsWith("/l/")) &&
     (BLOCKED_PATHNAMES.some((blockedPath) => path.includes(blockedPath)) ||
       path.includes("."))
   ) {

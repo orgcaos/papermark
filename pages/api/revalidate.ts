@@ -42,6 +42,16 @@ export default async function handler(
         console.log("revalidating", `/view/${linkId}`);
         // revalidate a regular papermark link
         await res.revalidate(`/view/${linkId}`);
+
+        // also revalidate its pretty /l/[shortSlug] URL, if it has one
+        const link = await prisma.link.findUnique({
+          where: { id: linkId },
+          select: { shortSlug: true },
+        });
+        if (link?.shortSlug) {
+          console.log("revalidating", `/l/${link.shortSlug}`);
+          await res.revalidate(`/l/${link.shortSlug}`);
+        }
       }
     }
 
@@ -51,7 +61,7 @@ export default async function handler(
         where: {
           documentId: documentId,
         },
-        select: { id: true, domainSlug: true, slug: true },
+        select: { id: true, domainSlug: true, slug: true, shortSlug: true },
       });
       for (const link of links) {
         if (link.domainSlug && link.slug) {
@@ -65,6 +75,10 @@ export default async function handler(
           // revalidate a regular papermark link
           console.log("revalidating document link", `/view/${link.id}`);
           await res.revalidate(`/view/${link.id}`);
+          if (link.shortSlug) {
+            console.log("revalidating", `/l/${link.shortSlug}`);
+            await res.revalidate(`/l/${link.shortSlug}`);
+          }
         }
       }
     }
@@ -81,6 +95,7 @@ export default async function handler(
           id: true,
           domainSlug: true,
           slug: true,
+          shortSlug: true,
         },
       });
 
@@ -96,6 +111,10 @@ export default async function handler(
         } else {
           console.log("revalidating link", `/view/${link.id}`);
           await res.revalidate(`/view/${link.id}`);
+          if (link.shortSlug) {
+            console.log("revalidating", `/l/${link.shortSlug}`);
+            await res.revalidate(`/l/${link.shortSlug}`);
+          }
         }
       }
     }

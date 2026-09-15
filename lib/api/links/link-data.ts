@@ -938,6 +938,43 @@ export async function fetchLinkDataById({
 }
 
 /**
+ * Fetch link data by shortSlug (for /l/[shortSlug] routes -- the pretty
+ * short URL on the main domain, e.g. /l/services-book-a8k2). Same
+ * not-custom-domain treatment as fetchLinkDataById, just keyed on the
+ * shortSlug instead of the cuid.
+ */
+export async function fetchLinkDataByShortSlug({
+  shortSlug,
+  dataroomDocumentId,
+}: {
+  shortSlug: string;
+  dataroomDocumentId?: string;
+}): Promise<LinkFetchResult> {
+  const link = await prisma.link.findUnique({
+    where: { shortSlug },
+    select: linkSelect,
+  });
+
+  if (!link) {
+    return { status: "not_found" };
+  }
+
+  if (link.deletedAt) {
+    return { status: "deleted" };
+  }
+
+  if (link.isArchived) {
+    return { status: "archived" };
+  }
+
+  if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+    return { status: "expired" };
+  }
+
+  return processLinkData(link, { dataroomDocumentId, isCustomDomain: false });
+}
+
+/**
  * Fetch link data by domain and slug (for /view/domains/[domain]/[slug] routes)
  * Includes free plan check since custom domains require paid plan
  */

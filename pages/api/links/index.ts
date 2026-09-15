@@ -19,6 +19,10 @@ import {
   decryptEncrpytedPassword,
   generateEncrpytedPassword,
 } from "@/lib/utils";
+import {
+  buildShortSlugBase,
+  generateUniqueShortSlug,
+} from "@/lib/utils/generate-short-slug";
 import { sendLinkCreatedWebhook } from "@/lib/webhook/triggers/link-created";
 
 import { authOptions } from "../auth/[...nextauth]";
@@ -147,22 +151,25 @@ export default async function handler(
         });
       }
 
+      let targetName: string | null = null;
+
       if (documentLink) {
         const document = await prisma.document.findUnique({
           where: { id: targetId, teamId },
-          select: { id: true },
+          select: { id: true, name: true },
         });
         if (!document) {
           return res.status(400).json({
             error: "Invalid document.",
           });
         }
+        targetName = document.name;
       }
 
       if (dataroomLink && targetId) {
         const dataroom = await prisma.dataroom.findUnique({
           where: { id: targetId, teamId },
-          select: { isFrozen: true },
+          select: { isFrozen: true, name: true },
         });
         if (!dataroom) {
           return res.status(400).json({
@@ -175,6 +182,7 @@ export default async function handler(
               "This data room is frozen. You cannot create new links for a frozen data room.",
           });
         }
+        targetName = dataroom.name;
       }
 
       const hashedPassword =
@@ -221,6 +229,16 @@ export default async function handler(
             error: "The link already exists.",
           });
         }
+      }
+
+      // Main-domain links (no custom domain) get a pretty short URL, e.g.
+      // /l/services-book-a8k2, generated once here at creation time. It's
+      // immutable after this -- renaming the link later must not change a
+      // URL that may already be shared -- so this only ever runs on create.
+      let shortSlug: string | null = null;
+      if (!domain || !slug) {
+        const shortSlugBase = buildShortSlugBase(linkData.name, targetName);
+        shortSlug = await generateUniqueShortSlug(shortSlugBase);
       }
 
       if (linkData.enableAgreement && !linkData.agreementId) {
@@ -349,6 +367,7 @@ export default async function handler(
             domainId: domainObj?.id || null,
             domainSlug: domain || null,
             slug: slug || null,
+            shortSlug,
             enableIndexFile: enableIndexFile,
             enableNotification: linkData.enableNotification,
             enableFeedback: linkData.enableFeedback,

@@ -124,6 +124,9 @@ export const getFullUrl = (link: LinkWithViews) => {
   if (link.domainId) {
     return `https://${link.domainSlug}/${link.slug}`;
   }
+  if (link.shortSlug) {
+    return `${process.env.NEXT_PUBLIC_MARKETING_URL}/l/${link.shortSlug}`;
+  }
   return `${process.env.NEXT_PUBLIC_MARKETING_URL}/view/${link.id}`;
 };
 
@@ -131,6 +134,9 @@ export const getFullUrl = (link: LinkWithViews) => {
 const getDisplayUrl = (link: LinkWithViews) => {
   if (link.domainId) {
     return `${link.domainSlug}/${link.slug}`;
+  }
+  if (link.shortSlug) {
+    return `${process.env.NEXT_PUBLIC_APP_BASE_HOST}/l/${link.shortSlug}`;
   }
   return `${process.env.NEXT_PUBLIC_APP_BASE_HOST}/view/${link.id}`;
 };

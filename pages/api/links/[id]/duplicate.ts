@@ -9,6 +9,10 @@ import { getServerSession } from "next-auth/next";
 import { errorhandler } from "@/lib/errorHandler";
 import prisma from "@/lib/prisma";
 import { CustomUser } from "@/lib/types";
+import {
+  buildShortSlugBase,
+  generateUniqueShortSlug,
+} from "@/lib/utils/generate-short-slug";
 import { sendLinkCreatedWebhook } from "@/lib/webhook/triggers/link-created";
 
 export const config = {
@@ -98,6 +102,14 @@ export default async function handle(
         ? link.name + " (Copy)"
         : `Link #${link.id.slice(-5)} (Copy)`;
 
+      // `...rest` below carries over the original's `shortSlug`, which would
+      // collide (it's globally unique) -- generate a fresh one for the copy.
+      // Custom-domain links (domainId set) keep using slug/domainSlug and
+      // never had a shortSlug to begin with.
+      const newShortSlug = link.domainId
+        ? null
+        : await generateUniqueShortSlug(buildShortSlugBase(newLinkName));
+
       const newLink = await prisma.$transaction(async (tx) => {
         // Duplicate permission group if it exists
         let newPermissionGroupId: string | null = null;
@@ -134,6 +146,7 @@ export default async function handle(
             ...rest,
             id: undefined,
             slug: link.slug ? link.slug + "-copy" : null,
+            shortSlug: newShortSlug,
             name: newLinkName,
             watermarkConfig: link.watermarkConfig || Prisma.JsonNull,
             createdAt: undefined,

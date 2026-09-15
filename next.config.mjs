@@ -247,6 +247,17 @@ const nextConfig = {
         ],
       },
       {
+        // Pretty short-URL viewer route (/l/[shortSlug]), same public
+        // viewer surface as /view/:path* above.
+        source: "/l/:path*",
+        headers: [
+          {
+            key: "X-Robots-Tag",
+            value: "noindex",
+          },
+        ],
+      },
+      {
         source: "/login",
         has: [
           {
@@ -264,6 +275,28 @@ const nextConfig = {
       {
         // Embed routes - allow iframe embedding
         source: "/view/:path*/embed",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              `default-src 'self' https: ${isDev ? "http:" : ""}; ` +
+              `script-src 'self' 'unsafe-inline' 'unsafe-eval' https: ${isDev ? "http:" : ""}; ` +
+              `style-src 'self' 'unsafe-inline' https: ${isDev ? "http:" : ""}; ` +
+              `img-src 'self' data: blob: https: ${isDev ? "http:" : ""}; ` +
+              `font-src 'self' data: https: ${isDev ? "http:" : ""}; ` +
+              "frame-ancestors *; " + // This allows iframe embedding
+              `connect-src 'self' https: ${isDev ? "http: ws: wss:" : ""}; ` + // Add WebSocket for hot reload
+              `${isDev ? "" : "upgrade-insecure-requests;"}`,
+          },
+          {
+            key: "X-Robots-Tag",
+            value: "noindex",
+          },
+        ],
+      },
+      {
+        // Embed routes for the pretty short-URL tree - same as /view/:path*/embed above
+        source: "/l/:path*/embed",
         headers: [
           {
             key: "Content-Security-Policy",

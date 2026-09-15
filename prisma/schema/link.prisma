@@ -33,6 +33,7 @@ model Link {
   domain                     Domain?    @relation(fields: [domainId], references: [id], onDelete: SetNull)
   domainId                   String? // This can be nullable, representing links without custom domains
   domainSlug                 String? // This will store the domain's slug even if the domain is deleted
+  shortSlug                  String?    @unique // Pretty short URL for main-domain links, e.g. /l/{shortSlug} -- deliberately a separate globally-unique field rather than reusing `slug` (whose uniqueness is only enforced together with `domainSlug`, which is always null for main-domain links) and kept independent from the custom-domain slug/domainSlug system so none of the many `domainSlug && slug` "is this a custom domain link" checks elsewhere in the codebase need to change
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
   enableNotification         Boolean?   @default(true) // Optional give user a option to pause/resume the notifications
