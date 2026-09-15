@@ -179,7 +179,10 @@ export function ShareLinkReadyModal({
 // Sales Documents email card). Title is the share link's own name (not the
 // document name), and the second line shows the file name as clickable
 // text instead of the raw URL -- both changed 2026-09-14 per Savvas's
-// feedback. Border uses the Orgcaos accent color, no shadow.
+// feedback. Border uses the Orgcaos accent color, no shadow. Thumbnail
+// keeps the document's natural aspect ratio (bounded by max-width/
+// max-height) instead of a forced 1:1 crop -- changed 2026-09-15 per
+// Savvas's feedback.
 function buildEmailCardHtml({
   url,
   title,
@@ -197,7 +200,7 @@ function buildEmailCardHtml({
   return (
     `<table style="max-width:400px;width:100%;border:1px solid #BB5E4E;border-radius:8px;background-color:#ffffff;box-shadow:none" cellpadding="0" cellspacing="0"><tbody>` +
     `<tr>` +
-    `<td style="width:88px;padding:12px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:6px;border:0" /></a></td>` +
+    `<td style="width:88px;padding:12px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" style="display:block;max-width:72px;max-height:96px;width:auto;height:auto;border-radius:6px;border:0" /></a></td>` +
     `<td style="padding:12px 16px 12px 0" valign="middle">` +
     `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:bold;text-decoration:none">${escapedTitle}</a>` +
     `<a href="${url}" target="_blank" style="display:block;margin-top:4px;color:#2563eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;text-decoration:underline;word-break:break-all">${escapedFileName}</a>` +
