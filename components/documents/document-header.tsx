@@ -152,7 +152,6 @@ export default function DocumentHeader({
   const [addDataRoomOpen, setAddDataRoomOpen] = useState<boolean>(false);
   const [moveFolderOpen, setMoveFolderOpen] = useState<boolean>(false);
   const [addDocumentVersion, setAddDocumentVersion] = useState<boolean>(false);
-  const [openAddDocModal, setOpenAddDocModal] = useState<boolean>(false);
   const [redactionJobsOpen, setRedactionJobsOpen] = useState<boolean>(false);
   const [redactionConfigOpen, setRedactionConfigOpen] = useState<boolean>(false);
   const [planModalOpen, setPlanModalOpen] = useState<boolean>(false);
@@ -768,29 +767,11 @@ export default function DocumentHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-x-1 sm:gap-x-4 md:gap-x-2">
-          {primaryVersion.type !== "notion" &&
-            primaryVersion.type !== "link" && (
-              <AddDocumentModal
-                newVersion
-                documentId={prismaDocument.id}
-                openModal={openAddDocModal}
-                setAddDocumentModalOpen={setOpenAddDocModal}
-              >
-                <ButtonTooltip content="Upload new version">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenAddDocModal(true);
-                    }}
-                    className="hidden size-8 md:flex lg:size-9"
-                  >
-                    <FileUp className="h-6 w-6" />
-                  </Button>
-                </ButtonTooltip>
-              </AddDocumentModal>
-            )}
+          {/* "Upload new version" moved out of this icon-button row and next
+              to Create Link, with a visible label -- see NewVersionButton in
+              pages/documents/[id]/index.tsx. Added 2026-09-15 per Savvas's
+              request. The mobile "..." menu item below (Add new version)
+              still covers narrow screens. */}
 
           {links && links.length > 0 && (
             <ButtonTooltip content="Copy email card">

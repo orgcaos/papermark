@@ -23,7 +23,74 @@ export default async function handle(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  if (req.method === "POST") {
+  if (req.method === "GET") {
+    // GET /api/teams/:teamId/documents/:id/versions
+    // Lists all versions for the document's "Versions" panel (added
+    // 2026-09-15 per Savvas's request) -- session-only auth, no Bearer-token
+    // path needed since this is only ever called from the document page.
+    const { teamId, id: documentId } = req.query as {
+      teamId: string;
+      id: string;
+    };
+
+    const session = await getServerSession(req, res, authOptions);
+    if (!session) {
+      return res.status(401).end("Unauthorized");
+    }
+    const userId = (session.user as CustomUser).id;
+
+    if (await enforceDocumentMemberScope({ userId, teamId, documentId, res })) {
+      return;
+    }
+
+    try {
+      const team = await prisma.team.findUnique({
+        where: {
+          id: teamId,
+          users: { some: { userId } },
+        },
+        select: { id: true },
+      });
+
+      if (!team) {
+        return res.status(401).end("Unauthorized");
+      }
+
+      const document = await prisma.document.findUnique({
+        where: { id: documentId, teamId },
+        select: { id: true },
+      });
+
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      const versions = await prisma.documentVersion.findMany({
+        where: { documentId },
+        orderBy: { versionNumber: "desc" },
+        select: {
+          id: true,
+          versionNumber: true,
+          isPrimary: true,
+          type: true,
+          contentType: true,
+          numPages: true,
+          createdAt: true,
+        },
+      });
+
+      return res.status(200).json(versions);
+    } catch (error) {
+      log({
+        message: `Failed to list versions for document: _${documentId}_. \n\n ${error} \n\n*Metadata*: \`{teamId: ${teamId}}\``,
+        type: "error",
+      });
+      return res.status(500).json({
+        message: "Internal Server Error",
+        error: (error as Error).message,
+      });
+    }
+  } else if (req.method === "POST") {
     // POST /api/teams/:teamId/documents/:id/versions
     const { teamId, id: documentId } = req.query as {
       teamId: string;
@@ -254,8 +321,7 @@ export default async function handle(
       });
     }
   } else {
-    // We only allow GET requests
-    res.setHeader("Allow", ["GET"]);
+    res.setHeader("Allow", ["GET", "POST"]);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }

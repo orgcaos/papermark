@@ -7,11 +7,13 @@ import { Suspense, useState } from "react";
 import { useTeam } from "@/context/team-context";
 import { RedactionLauncher } from "@/ee/features/redaction/components/redaction-launcher";
 import { PlanEnum } from "@/ee/stripe/constants";
+import { PlusIcon } from "lucide-react";
 
 import { useDocumentLinks } from "@/lib/swr/use-document";
 import { useDocumentOverview } from "@/lib/swr/use-document-overview";
 
 import { UpgradePlanModal } from "@/components/billing/upgrade-plan-modal";
+import { AddDocumentModal } from "@/components/documents/add-document-modal";
 import DocumentHeader from "@/components/documents/document-header";
 import { DocumentPreviewButton } from "@/components/documents/document-preview-button";
 // Import placeholder components
@@ -19,6 +21,8 @@ import DocumentStatsPlaceholder from "@/components/documents/document-stats-plac
 import LinkDocumentIndicator from "@/components/documents/link-document-indicator";
 import NotionAccessibilityIndicator from "@/components/documents/notion-accessibility-indicator";
 import VideoStatsPlaceholder from "@/components/documents/video-stats-placeholder";
+import { VersionsPanel } from "@/components/documents/versions-panel";
+import FileUp from "@/components/shared/icons/file-up";
 import AppLayout from "@/components/layouts/app";
 import LinkSheet from "@/components/links/link-sheet";
 import LinksTable from "@/components/links/links-table";
@@ -98,7 +102,8 @@ export default function DocumentPage() {
           clickedPlan={team?.isTrial ? PlanEnum.Business : PlanEnum.Pro}
           trigger={"limit_add_link"}
         >
-          <Button className="flex h-8 whitespace-nowrap text-xs lg:h-9 lg:text-sm">
+          <Button className="flex h-8 items-center whitespace-nowrap text-xs lg:h-9 lg:text-sm">
+            <PlusIcon className="mr-1 h-4 w-4" />
             Upgrade to Create Link
           </Button>
         </UpgradePlanModal>
@@ -107,9 +112,10 @@ export default function DocumentPage() {
       return (
         <div className="flex items-center gap-2">
           <Button
-            className="flex h-8 whitespace-nowrap text-xs lg:h-9 lg:text-sm"
+            className="flex h-8 items-center whitespace-nowrap text-xs lg:h-9 lg:text-sm"
             onClick={() => setIsLinkSheetOpen(true)}
           >
+            <PlusIcon className="mr-1 h-4 w-4" />
             Create Link
           </Button>
         </div>
@@ -142,6 +148,42 @@ export default function DocumentPage() {
     );
   }
 
+  // Moved out of DocumentHeader's own icon-button row and next to Create Link
+  // (added 2026-09-15 per Savvas's request), with its own visible label to
+  // match. Self-contained (own open state + AddDocumentModal instance), same
+  // pattern as DocumentHeader's mobile dropdown fallback, so nothing needs to
+  // thread through DocumentHeader's props for this. Defined here (after the
+  // prismaDocument/primaryVersion null checks above) rather than next to
+  // AddLinkButton so TypeScript can see they're narrowed to defined.
+  const NewVersionButton = () => {
+    const [open, setOpen] = useState(false);
+
+    if (primaryVersion.type === "notion" || primaryVersion.type === "link") {
+      return null;
+    }
+
+    return (
+      <AddDocumentModal
+        newVersion
+        documentId={prismaDocument.id}
+        openModal={open}
+        setAddDocumentModalOpen={setOpen}
+      >
+        <Button
+          variant="outline"
+          className="flex h-8 items-center whitespace-nowrap text-xs lg:h-9 lg:text-sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          <FileUp className="mr-1 h-4 w-4" />
+          New version
+        </Button>
+      </AddDocumentModal>
+    );
+  };
+
   return (
     <AppLayout>
       <main className="relative mx-2 mb-10 mt-4 space-y-8 px-1 sm:mx-3 md:mx-5 md:mt-5 lg:mx-7 lg:mt-8 xl:mx-10">
@@ -171,9 +213,9 @@ export default function DocumentPage() {
               primaryVersion={primaryVersion}
               advancedExcelEnabled={prismaDocument.advancedExcelEnabled}
               variant="outline"
-              size="default"
+              size="icon"
               showTooltip
-              className="h-8 whitespace-nowrap text-xs lg:h-9 lg:text-sm"
+              className="h-8 w-8 lg:h-9 lg:w-9"
             />,
             <RedactionLauncher
               key={"redaction-launcher"}
@@ -181,6 +223,7 @@ export default function DocumentPage() {
               documentName={prismaDocument.name}
               documentType={primaryVersion.type}
             />,
+            <NewVersionButton key={"new-version"} />,
             <AddLinkButton key={"create-link"} />,
           ]}
         />
@@ -221,15 +264,24 @@ export default function DocumentPage() {
                 />
               ))}
 
-            {/* Links - Always show */}
-            <LinksTable
-              links={links}
-              targetType={"DOCUMENT"}
-              primaryVersion={primaryVersion}
-              mutateDocument={mutateDocument}
-              onBulkImportOpen={() => setIsBulkImportOpen(true)}
-              documentName={prismaDocument.name}
-            />
+            {/* Links + Versions - Always show. Links takes the majority of
+                the width with Versions as a narrower side panel filling the
+                space freed up next to it (added 2026-09-15 per Savvas's
+                request); stacks on smaller screens. */}
+            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <LinksTable
+                links={links}
+                targetType={"DOCUMENT"}
+                primaryVersion={primaryVersion}
+                mutateDocument={mutateDocument}
+                onBulkImportOpen={() => setIsBulkImportOpen(true)}
+                documentName={prismaDocument.name}
+              />
+              <VersionsPanel
+                documentId={prismaDocument.id}
+                documentName={prismaDocument.name}
+              />
+            </div>
           </>
         </Suspense>
 

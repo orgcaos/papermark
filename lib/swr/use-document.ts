@@ -90,6 +90,52 @@ export function useDocumentLinks(documentId?: string) {
   };
 }
 
+export interface DocumentVersionSummary {
+  id: string;
+  versionNumber: number;
+  isPrimary: boolean;
+  type: string | null;
+  contentType: string | null;
+  numPages: number | null;
+  createdAt: string;
+}
+
+// Backs the document page's "Versions" panel -- added 2026-09-15 per
+// Savvas's request to surface version history there.
+export function useDocumentVersions(documentId?: string) {
+  const router = useRouter();
+  const teamInfo = useTeam();
+
+  const { id: routerId } = router.query as {
+    id: string;
+  };
+
+  const id = documentId ?? routerId;
+
+  const {
+    data: versions,
+    error,
+    mutate,
+  } = useSWR<DocumentVersionSummary[]>(
+    teamInfo?.currentTeam?.id &&
+      id &&
+      `/api/teams/${teamInfo?.currentTeam?.id}/documents/${encodeURIComponent(
+        id,
+      )}/versions`,
+    fetcher,
+    {
+      dedupingInterval: 10000,
+    },
+  );
+
+  return {
+    versions,
+    loading: !error && !versions,
+    error,
+    mutate,
+  };
+}
+
 interface ViewWithDuration extends View {
   internal: boolean;
   duration: {
