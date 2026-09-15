@@ -25,8 +25,13 @@ export function TopDocumentsCard({
     <AnalyticsCard
       title="Top documents"
       icon={
+        // Hash anchor so this actually scrolls the (now-selected) Documents
+        // tab into view instead of just changing the query string while the
+        // page stays put -- previously felt like a dead link, since the
+        // table this switches to is further down the page. See the
+        // id="dashboard-tabs" wrapper around <TabMenu /> in pages/dashboard.tsx.
         <Link
-          href={`/dashboard?interval=${interval}&type=documents`}
+          href={`/dashboard?interval=${interval}&type=documents#dashboard-tabs`}
           className="text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           View all &rarr;

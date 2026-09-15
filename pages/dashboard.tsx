@@ -235,39 +235,45 @@ export default function DashboardPage() {
             />
           </div>
 
-          <TabMenu
-            navigation={[
-              {
-                label: "Links",
-                href: `/dashboard?interval=${interval}&type=links`,
-                value: "links",
-                currentValue: type,
-                count: overview?.counts.links,
-              },
-              {
-                label: "Documents",
-                href: `/dashboard?interval=${interval}&type=documents`,
-                value: "documents",
-                currentValue: type,
-                count: overview?.counts.documents,
-              },
-              {
-                label: "Visitors",
-                href: `/dashboard?interval=${interval}&type=visitors`,
-                value: "visitors",
-                currentValue: type,
-                count: overview?.counts.visitors,
-              },
-              {
-                label: "Recent Views",
-                href: `/dashboard?interval=${interval}&type=views`,
-                value: "views",
-                currentValue: type,
-                count: overview?.counts.views,
-              },
-            ]}
-            className="z-10"
-          />
+          {/* id target for TopDocumentsCard's "View all" link (and any other
+              same-page tab switch) to scroll to -- without it, switching the
+              `type` query param happened off-screen below the fold and felt
+              like nothing had happened. */}
+          <div id="dashboard-tabs">
+            <TabMenu
+              navigation={[
+                {
+                  label: "Links",
+                  href: `/dashboard?interval=${interval}&type=links`,
+                  value: "links",
+                  currentValue: type,
+                  count: overview?.counts.links,
+                },
+                {
+                  label: "Documents",
+                  href: `/dashboard?interval=${interval}&type=documents`,
+                  value: "documents",
+                  currentValue: type,
+                  count: overview?.counts.documents,
+                },
+                {
+                  label: "Visitors",
+                  href: `/dashboard?interval=${interval}&type=visitors`,
+                  value: "visitors",
+                  currentValue: type,
+                  count: overview?.counts.visitors,
+                },
+                {
+                  label: "Recent Views",
+                  href: `/dashboard?interval=${interval}&type=views`,
+                  value: "views",
+                  currentValue: type,
+                  count: overview?.counts.views,
+                },
+              ]}
+              className="z-10"
+            />
+          </div>
 
           <div className="grid grid-cols-1">
             {type === "links" && (

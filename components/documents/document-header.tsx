@@ -165,14 +165,6 @@ export default function DocumentHeader({
   const savingNameRef = useRef<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const actionRows: React.ReactNode[][] = [];
-
-  if (actions) {
-    for (let i = 0; i < actions.length; i += 3) {
-      actionRows.push(actions.slice(i, i + 3));
-    }
-  }
-
   // Check if document is in any datarooms
   const dataroomCount = prismaDocument.datarooms?.length || 0;
 
@@ -839,18 +831,19 @@ export default function DocumentHeader({
               </ButtonTooltip>
             ))}
 
-          <div className="flex items-center gap-x-1">
-            {actionRows.map((row, i) => (
-              <ul
-                key={i.toString()}
-                className="flex flex-wrap items-center justify-end gap-x-2 md:flex-nowrap md:gap-x-1"
-              >
-                {row.map((action, i) => (
-                  <li key={i}>{action}</li>
-                ))}
-              </ul>
-            ))}
-          </div>
+          {/* Single row with one consistent gap -- this used to chunk
+              `actions` into groups of 3 across separate <ul>s (a leftover
+              from when every action was a same-size icon button), which
+              nested a second, different gap value between rows on top of
+              the gap within each row. Combined with actions that self-hide
+              (still leaving an empty <li> taking up a gap), that produced
+              visibly uneven spacing between New version / Create Link /
+              Preview etc. Callers now only pass actions that will actually
+              render (see pages/documents/[id]/index.tsx), so a flat list
+              with a single gap is enough. */}
+          <ul className="flex flex-wrap items-center justify-end gap-x-2 md:flex-nowrap md:gap-x-1">
+            {actions?.map((action, i) => <li key={i}>{action}</li>)}
+          </ul>
 
           <DropdownMenu open={menuOpen} onOpenChange={handleMenuStateChange}>
             <DropdownMenuTrigger asChild>

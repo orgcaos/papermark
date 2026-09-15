@@ -5,7 +5,6 @@ import ErrorPage from "next/error";
 import { Suspense, useState } from "react";
 
 import { useTeam } from "@/context/team-context";
-import { RedactionLauncher } from "@/ee/features/redaction/components/redaction-launcher";
 import { PlanEnum } from "@/ee/stripe/constants";
 import { PlusIcon } from "lucide-react";
 
@@ -194,19 +193,34 @@ export default function DocumentPage() {
           teamId={teamId}
           links={links}
           onBulkImportLinks={() => setIsBulkImportOpen(true)}
+          // Only include an action here when it will actually render a
+          // button -- these three each self-hide for most document types
+          // (NotionAccessibilityIndicator/LinkDocumentIndicator only apply
+          // to notion/link documents, NewVersionButton hides for both).
+          // Previously they were always included and DocumentHeader wrapped
+          // every action in its own flex item regardless of whether it
+          // rendered anything, so a document that skipped one or two of
+          // them got uneven-looking gaps between the buttons that did show
+          // (New version / Create Link / Preview etc). Filtering here, and
+          // removed RedactionLauncher entirely -- it always returns null in
+          // this deployment (see ee/features/redaction/components/redaction-launcher.tsx).
           actions={[
-            <NotionAccessibilityIndicator
-              key={"notion-status"}
-              documentId={prismaDocument.id}
-              primaryVersion={primaryVersion}
-              onUrlUpdate={mutateDocument}
-            />,
-            <LinkDocumentIndicator
-              key={"link-status"}
-              documentId={prismaDocument.id}
-              primaryVersion={primaryVersion}
-              onUrlUpdate={mutateDocument}
-            />,
+            primaryVersion.type === "notion" && (
+              <NotionAccessibilityIndicator
+                key={"notion-status"}
+                documentId={prismaDocument.id}
+                primaryVersion={primaryVersion}
+                onUrlUpdate={mutateDocument}
+              />
+            ),
+            primaryVersion.type === "link" && (
+              <LinkDocumentIndicator
+                key={"link-status"}
+                documentId={prismaDocument.id}
+                primaryVersion={primaryVersion}
+                onUrlUpdate={mutateDocument}
+              />
+            ),
             <DocumentPreviewButton
               key={"preview"}
               documentId={prismaDocument.id}
@@ -217,15 +231,12 @@ export default function DocumentPage() {
               showTooltip
               className="h-8 w-8 lg:h-9 lg:w-9"
             />,
-            <RedactionLauncher
-              key={"redaction-launcher"}
-              documentId={prismaDocument.id}
-              documentName={prismaDocument.name}
-              documentType={primaryVersion.type}
-            />,
-            <NewVersionButton key={"new-version"} />,
+            primaryVersion.type !== "notion" &&
+              primaryVersion.type !== "link" && (
+                <NewVersionButton key={"new-version"} />
+              ),
             <AddLinkButton key={"create-link"} />,
-          ]}
+          ].filter(Boolean)}
         />
 
         {/* Progressive Loading: Always show components, but optimize for empty states */}
