@@ -357,7 +357,7 @@ export function UploadNotificationDrawer({
     if (hasMaxFiles && isDatarooms) {
       return {
         label: "Contact support",
-        href: "mailto:support@papermark.com",
+        href: "mailto:savvastheodosiou@gmail.com",
       };
     }
     return { label: "Upgrade", href: "/settings/billing" };

@@ -136,7 +136,7 @@ export default function WatermarkPreview({
                   </svg>
                 </div>
                 <span className="whitespace-normal text-xs text-muted-foreground">
-                  papermark.com/view/...
+                  yourdomain.com/view/...
                 </span>
               </div>
             </div>

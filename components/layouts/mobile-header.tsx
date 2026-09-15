@@ -118,7 +118,7 @@ export function MobileHeader() {
               <Link href="/account/general">
                 <DropdownMenuItem>
                   <CircleUserRound className="mr-2 h-4 w-4" />
-                  User Settings
+                  Settings
                 </DropdownMenuItem>
               </Link>
             </DropdownMenuGroup>
@@ -126,8 +126,8 @@ export function MobileHeader() {
             <DropdownMenuGroup>
               <DropdownMenuItem
                 onClick={() => {
-                  navigator.clipboard.writeText("support@papermark.com");
-                  toast.success("support@papermark.com copied to clipboard");
+                  navigator.clipboard.writeText("savvastheodosiou@gmail.com");
+                  toast.success("savvastheodosiou@gmail.com copied to clipboard");
                 }}
               >
                 <MailIcon className="mr-2 h-4 w-4" />

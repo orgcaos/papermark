@@ -141,7 +141,7 @@ export default function DenyListSection({
               className="focus:ring-inset"
               rows={5}
               placeholder={`Enter blocked emails/domains separated by comma, semicolon, or new line, e.g.
-marc@papermark.com
+jane@example.com
 @example.org`}
               value={denyListInput}
               onChange={handleDenyListChange}

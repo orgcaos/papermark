@@ -133,7 +133,7 @@ export default function AccessScreenPreview({
                   </svg>
                 </div>
                 <span className="whitespace-normal text-xs text-muted-foreground">
-                  papermark.com/view/...
+                  yourdomain.com/view/...
                 </span>
               </div>
             </div>

@@ -6,10 +6,10 @@ export function SettingsHeader() {
       <section className="mb-4 flex items-center justify-between md:mb-8 lg:mb-12">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            General Settings
+            Settings
           </h1>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Manage your account settings
+            Manage your account, domains, and link preferences
           </p>
         </div>
       </section>

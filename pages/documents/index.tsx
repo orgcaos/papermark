@@ -67,9 +67,9 @@ export default function Documents() {
       <div className="sticky top-0 mb-4 min-h-[calc(100vh-72px)] rounded-lg bg-white p-3 dark:bg-gray-900 sm:mx-4 sm:p-4 sm:pt-8">
         <section className="mb-4 flex items-center justify-between space-x-2 sm:space-x-0">
           <div className="space-y-0 sm:space-y-1">
-            <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
               All Documents
-            </h2>
+            </h1>
           </div>
           <div className="flex items-center gap-x-2">
             <AddDocumentDropdown variant="split" />

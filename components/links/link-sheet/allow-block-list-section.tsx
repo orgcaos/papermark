@@ -324,7 +324,7 @@ export default function AllowBlockListSection({
                 className="focus:ring-inset"
                 rows={5}
                 placeholder={`Enter allowed emails/domains separated by comma, semicolon, or new line, e.g.
-marc@papermark.com
+jane@example.com
 @example.org`}
                 value={allowListInput}
                 onChange={handleAllowListChange}
@@ -353,7 +353,7 @@ marc@papermark.com
                 className="focus:ring-inset"
                 rows={5}
                 placeholder={`Enter blocked emails/domains separated by comma, semicolon, or new line, e.g.
-marc@papermark.com
+jane@example.com
 @example.org`}
                 value={denyListInput}
                 onChange={handleDenyListChange}

@@ -864,12 +864,6 @@ export default function LinkSheet({
                           </div>
                           <Select
                             onValueChange={(value) => {
-                              if (value === "add_group") {
-                                // Open the group sheet
-                                console.log("add_group redirect");
-                                return;
-                              }
-
                               setData({ ...data, groupId: value });
                             }}
                             defaultValue={data.groupId ?? undefined}

@@ -116,9 +116,14 @@ export default function DashboardPage() {
   );
 
   if (error && !slug.current) {
-    const errorObj = JSON.parse(error.message);
-    const errorMessage = errorObj?.error;
-    toast.info(errorMessage);
+    let errorMessage: string | undefined;
+    try {
+      errorMessage = JSON.parse(error.message)?.error;
+    } catch {
+      // error.message was not JSON (e.g. a 502/HTML error page) -- fall
+      // through to the generic message below instead of crashing render.
+    }
+    toast.info(errorMessage ?? "Something went wrong loading your dashboard.");
     setCustomRange(defaultRange);
     slug.current = true;
   }
@@ -174,7 +179,7 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold tracking-tight sm:text-3xl">Dashboard</h2>
+          <h1 className="text-xl font-bold tracking-tight sm:text-3xl">Dashboard</h1>
         </div>
 
         <div className="relative space-y-4">
