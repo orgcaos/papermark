@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 import { PlanEnum } from "@/ee/stripe/constants";
 import Cookies from "js-cookie";
-import { CogIcon, FolderIcon, HouseIcon, WorkflowIcon } from "lucide-react";
+import { FolderIcon, HouseIcon, WorkflowIcon } from "lucide-react";
 
 import { useFeatureFlags } from "@/lib/hooks/use-feature-flags";
 import { usePlan } from "@/lib/swr/use-billing";
@@ -75,23 +75,11 @@ export function AppSidebarContent() {
         plan: PlanEnum.DataRoomsPlus,
         highlightItem: ["workflows"],
       },
-      {
-        title: "General Settings",
-        url: "/settings/notifications",
-        icon: CogIcon,
-        isActive:
-          router.pathname.includes("settings") &&
-          !router.pathname.includes("branding") &&
-          !router.pathname.includes("datarooms") &&
-          !router.pathname.includes("documents"),
-        items: [
-          {
-            title: "Notifications",
-            url: "/settings/notifications",
-            current: router.pathname.includes("settings/notifications"),
-          },
-        ],
-      },
+      // "General Settings" moved to the bottom-left User Account card
+      // (components/sidebar/nav-user.tsx) per Savvas's request, 2026-09-15
+      // -- it was a collapsible entry with a single "Notifications" child,
+      // which was redundant with the real tab bar on the settings pages
+      // themselves (components/settings/settings-header.tsx).
     ],
   };
 

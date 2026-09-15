@@ -17,6 +17,11 @@ export function SettingsHeader() {
       <NavMenu
         navigation={[
           {
+            label: "User Account",
+            href: `/settings/account`,
+            segment: "account",
+          },
+          {
             label: "Domains",
             href: `/settings/domains`,
             segment: "domains",
