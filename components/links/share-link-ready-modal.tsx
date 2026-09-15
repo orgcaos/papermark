@@ -179,13 +179,26 @@ export function ShareLinkReadyModal({
 // Sales Documents email card). Title is the share link's own name (not the
 // document name), and the second line shows the file name as clickable
 // text instead of the raw URL -- both changed 2026-09-14 per Savvas's
-// feedback. Border uses the Orgcaos accent color, no shadow. Thumbnail
-// keeps the document's natural aspect ratio, bounded by a 96x96 box
-// instead of a forced 1:1 crop -- changed 2026-09-15 per Savvas's
-// feedback. A symmetric box (rather than a wide-but-short one) means a
-// landscape document (e.g. 16:9 slides) renders noticeably bigger than a
-// portrait one, since only the portrait case is height-limited -- also
-// per Savvas's feedback (2026-09-15).
+// feedback. Thumbnail keeps the document's natural aspect ratio, bounded
+// by a 96x96 box instead of a forced 1:1 crop -- changed 2026-09-15 per
+// Savvas's feedback. A symmetric box (rather than a wide-but-short one)
+// means a landscape document (e.g. 16:9 slides) renders noticeably bigger
+// than a portrait one, since only the portrait case is height-limited --
+// also per Savvas's feedback (2026-09-15).
+//
+// Colors/spacing/type tuned by Savvas directly in a CodePen mockup and
+// ported back verbatim (2026-09-15): accent color #904F44 (border, filename
+// link, replacing the earlier #BB5E4E border / blue #2563eb filename link),
+// off-white #FBFBF9 background (was pure white), 6px card corners / 5px
+// thumbnail corners (was 8px/6px), larger title (20px) and filename (14px)
+// text. The thumbnail cell's padding was also bumped to 18px, and -- this
+// was the actual bug Savvas caught -- its old fixed `width:112px` was
+// dropped entirely: that width hint was smaller than the thumbnail's
+// content box on a wide (landscape) image but larger than it on a narrow
+// (portrait) one, so the gap between the thumbnail and the text was
+// inconsistent (tight on landscape, loose on portrait). Letting the cell
+// size purely from its padding + the image's own (already-capped) width
+// makes the gap constant regardless of the thumbnail's aspect ratio.
 function buildEmailCardHtml({
   url,
   title,
@@ -201,12 +214,12 @@ function buildEmailCardHtml({
   const escapedFileName = fileName.replace(/"/g, "&quot;");
 
   return (
-    `<table style="max-width:400px;width:100%;border:1px solid #BB5E4E;border-radius:8px;background-color:#ffffff;box-shadow:none" cellpadding="0" cellspacing="0"><tbody>` +
+    `<table style="max-width:400px;width:100%;border:1.5px solid #904F44;border-radius:6px;background-color:#FBFBF9;box-shadow:none" cellpadding="0" cellspacing="0"><tbody>` +
     `<tr>` +
-    `<td style="width:112px;padding:12px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" style="display:block;max-width:96px;max-height:96px;width:auto;height:auto;border-radius:6px;border:0" /></a></td>` +
+    `<td style="padding:18px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" style="display:block;max-width:96px;max-height:96px;width:auto;height:auto;border-radius:5px;border:0" /></a></td>` +
     `<td style="padding:12px 16px 12px 0" valign="middle">` +
-    `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;font-weight:bold;text-decoration:none">${escapedTitle}</a>` +
-    `<a href="${url}" target="_blank" style="display:block;margin-top:4px;color:#2563eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;text-decoration:underline;word-break:break-all">${escapedFileName}</a>` +
+    `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:20px;line-height:1.25;font-weight:bold;text-decoration:none">${escapedTitle}</a>` +
+    `<a href="${url}" target="_blank" style="display:block;margin-top:10px;color:#904F44;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.25;text-decoration:underline;word-break:break-all">${escapedFileName}</a>` +
     `</td>` +
     `</tr>` +
     `</tbody></table>`
