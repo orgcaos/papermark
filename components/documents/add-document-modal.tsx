@@ -461,7 +461,18 @@ export function AddDocumentModal({
       }
     } catch (error) {
       setUploading(false);
-      toast.error("An error occurred while uploading the file.");
+      // Surface the real failure reason when we have one (createDocument /
+      // createNewDocumentVersion now throw the server's actual error
+      // message, e.g. a validation rejection) instead of this generic
+      // catch-all, which previously hid every real cause behind the same
+      // unhelpful text -- changed 2026-09-16 while tracking down a upload-
+      // new-version bug that this generic message made impossible to
+      // diagnose without opening devtools.
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "An error occurred while uploading the file.";
+      toast.error(message);
       console.error("An error occurred while uploading the file: ", error);
     } finally {
       setUploading(false);

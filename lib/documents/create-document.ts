@@ -51,8 +51,23 @@ export const createDocument = async ({
   );
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error);
+    // Same fix as createNewDocumentVersion() below: surface the server's
+    // actual error message instead of `new Error(error)` on a parsed JSON
+    // object, which stringifies to the unhelpful "[object Object]".
+    let message = `HTTP error! status: ${response.status}`;
+    try {
+      const body = await response.json();
+      const detail =
+        body?.details && typeof body.details !== "string"
+          ? JSON.stringify(body.details)
+          : body?.details;
+      message = [body?.error || body?.message, detail]
+        .filter(Boolean)
+        .join(": ") || message;
+    } catch {
+      // Response body wasn't JSON -- keep the status-code message.
+    }
+    throw new Error(message);
   }
 
   return response;
@@ -135,12 +150,38 @@ export const createNewDocumentVersion = async ({
     );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // Surface the server's actual error message (e.g. Zod validation
+      // details from documentUploadSchema, or "Internal Server Error: ...")
+      // instead of a bare status code -- this is what add-document-modal.tsx
+      // shows the user, and a bare "HTTP error! status: 400" gave no way to
+      // tell a validation rejection apart from a server crash. Falls back to
+      // the status code if the response isn't JSON for some reason.
+      let message = `HTTP error! status: ${response.status}`;
+      try {
+        const body = await response.json();
+        const detail =
+          body?.details && typeof body.details !== "string"
+            ? JSON.stringify(body.details)
+            : body?.details;
+        message = [body?.error || body?.message, detail]
+          .filter(Boolean)
+          .join(": ") || message;
+      } catch {
+        // Response body wasn't JSON -- keep the status-code message.
+      }
+      throw new Error(message);
     }
 
     return response;
   } catch (error) {
     console.error("Error creating new document version:", error);
+    // Re-throw the original error (with its real message, per the block
+    // above) instead of the previous hardcoded "Invalid document ID or team
+    // ID" -- that message was wrong for anything other than an actual bad
+    // documentId, and it swallowed every other real failure reason.
+    if (error instanceof Error) {
+      throw error;
+    }
     throw new Error("Invalid document ID or team ID");
   }
 };
