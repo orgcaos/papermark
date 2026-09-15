@@ -56,7 +56,7 @@ export default function Login() {
           <div className="items-left flex flex-col space-y-3 px-4 py-6 pt-5 sm:px-12 sm:pt-6">
             <Link href="/">
               <img
-                src="/_static/papermark-logo.svg"
+                src="/_static/orgcaos-logo.svg"
                 alt="Orgcaos Docket"
                 className="mb-24 h-7 w-auto self-start sm:mb-20"
               />
