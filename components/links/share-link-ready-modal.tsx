@@ -241,10 +241,33 @@ function buildEmailCardHtml({
   const escapedTitle = title.replace(/"/g, "&quot;");
   const escapedFileName = fileName.replace(/"/g, "&quot;");
 
+  // border-collapse:separate;border-spacing:0 -- without an explicit value
+  // here, whatever page renders this table wins (e.g. Tailwind Preflight's
+  // global `table { border-collapse: collapse }`), and border-radius has
+  // no visual effect on a table once collapsed (spec behavior, confirmed
+  // 2026-09-15 via orgcaos-hubspot's Compose preview rendering this card
+  // with square corners despite border-radius:6px). Pin it so the card
+  // looks right wherever it's embedded.
+  // width:1%;white-space:nowrap on the thumbnail cell is the standard
+  // email-HTML "shrink to fit" idiom, not a real 1% -- neither cell has a
+  // width, so the table's auto layout algorithm has to guess how to split
+  // the 400px between them, and confirmed 2026-09-15 (via orgcaos-hubspot,
+  // which renders this same markup) it was splitting roughly 50/50
+  // (thumbnail cell ~200px, image only 96px of that) rather than shrinking
+  // the thumbnail column to its content, leaving a large, wrong gap before
+  // the text. This is deliberately NOT a fixed pixel width like the old
+  // `width:112px` mentioned above -- that was removed because a fixed
+  // width didn't match every thumbnail's actual (aspect-ratio-dependent)
+  // rendered size, making the gap inconsistent between landscape and
+  // portrait documents. width:1% just tells the layout algorithm "give
+  // this column no surplus space, size it from its content" -- the
+  // thumbnail cell still hugs the image's real rendered width (whatever
+  // that is) plus its own padding, exactly as before, it just no longer
+  // also absorbs half the table's free space.
   return (
-    `<table style="max-width:400px;width:100%;border:1.5px solid #904F44;border-radius:6px;background-color:#FBFBF9;box-shadow:none" cellpadding="0" cellspacing="0"><tbody>` +
+    `<table style="max-width:400px;width:100%;border:1.5px solid #904F44;border-radius:6px;background-color:#FBFBF9;box-shadow:none;border-collapse:separate;border-spacing:0" cellpadding="0" cellspacing="0"><tbody>` +
     `<tr>` +
-    `<td style="padding:18px" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" style="display:block;max-width:96px;max-height:96px;width:auto;height:auto;border-radius:5px;border:0" /></a></td>` +
+    `<td style="padding:18px;width:1%;white-space:nowrap" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" style="display:block;max-width:96px;max-height:96px;width:auto;height:auto;border-radius:5px;border:0" /></a></td>` +
     `<td style="padding:12px 16px 12px 0" valign="middle">` +
     `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:20px;line-height:1.25;font-weight:bold;text-decoration:none">${escapedTitle}</a>` +
     `<a href="${url}" target="_blank" style="display:block;margin-top:10px;color:#904F44;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.25;text-decoration:underline;word-break:break-all">${escapedFileName}</a>` +
