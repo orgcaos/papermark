@@ -8,14 +8,7 @@ import { useEffect, useState } from "react";
 
 import { PlanEnum } from "@/ee/stripe/constants";
 import Cookies from "js-cookie";
-import {
-  BrushIcon,
-  CogIcon,
-  ContactIcon,
-  FolderIcon,
-  HouseIcon,
-  WorkflowIcon,
-} from "lucide-react";
+import { CogIcon, FolderIcon, HouseIcon, WorkflowIcon } from "lucide-react";
 
 import { useFeatureFlags } from "@/lib/hooks/use-feature-flags";
 import { usePlan } from "@/lib/swr/use-billing";
@@ -73,16 +66,6 @@ export function AppSidebarContent() {
           !router.pathname.includes("datarooms"),
       },
       {
-        title: "Visitors",
-        url: "/visitors",
-        icon: ContactIcon,
-        current: router.pathname.includes("visitors"),
-        disabled: isFree && !isTrial,
-        trigger: "sidebar_visitors",
-        plan: PlanEnum.Pro,
-        highlightItem: ["visitors"],
-      },
-      {
         title: "Workflows",
         url: "/workflows",
         icon: WorkflowIcon,
@@ -91,14 +74,6 @@ export function AppSidebarContent() {
         trigger: "sidebar_workflows",
         plan: PlanEnum.DataRoomsPlus,
         highlightItem: ["workflows"],
-      },
-      {
-        title: "Branding",
-        url: "/branding",
-        icon: BrushIcon,
-        current:
-          router.pathname.includes("branding") &&
-          !router.pathname.includes("datarooms"),
       },
       {
         title: "General Settings",
