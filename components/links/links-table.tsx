@@ -98,6 +98,7 @@ import { TagColumn } from "./link-sheet/tags/tag-details";
 import LinksVisitors from "./links-visitors";
 import {
   ShareLinkReadyModal,
+  copyEmailCardToClipboard,
   type ShareLinkReadyModalData,
 } from "./share-link-ready-modal";
 import { useTransferLinkModal } from "./transfer-link-modal";
@@ -833,8 +834,8 @@ export default function LinksTable({
                               targetType === "DOCUMENT" &&
                               documentName &&
                               link.documentId
-                                ? (l) =>
-                                    setShareModalData({
+                                ? (l) => {
+                                    const shareData = {
                                       url: getFullUrl(l),
                                       title: l.name || `Link #${l.id.slice(-5)}`,
                                       fileName: ensureFileExtension({
@@ -843,7 +844,13 @@ export default function LinksTable({
                                         type: primaryVersion?.type,
                                       }),
                                       thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${l.documentId}`,
-                                    })
+                                    };
+                                    setShareModalData(shareData);
+                                    // Copy immediately on this click -- see
+                                    // the matching comment in
+                                    // document-header.tsx.
+                                    copyEmailCardToClipboard(shareData);
+                                  }
                                 : undefined
                             }
                             isProcessing={isDocumentProcessing(primaryVersion)}

@@ -26,6 +26,62 @@ export type ShareLinkReadyModalData = {
   thumbnailUrl: string;
 };
 
+// Shared by the modal's own "Copy formatted" button AND the top-level
+// "Copy email card" buttons (document-header.tsx, links-table.tsx), which
+// call this directly -- synchronously, in the same click handler that also
+// opens this modal -- so the card is copied automatically on that first
+// click instead of requiring a second click inside the modal. Calling it
+// straight from those onClick handlers (before any `await`) keeps the
+// actual `navigator.clipboard.write()` call tied to the click's user-
+// activation, same as calling it from this modal's own button. Shows its
+// own success/error toast so every caller gets consistent feedback without
+// duplicating it. Added 2026-09-16 per Savvas's feedback.
+export async function copyEmailCardToClipboard({
+  url,
+  title,
+  fileName,
+  thumbnailUrl,
+}: {
+  url: string;
+  title: string;
+  fileName: string;
+  thumbnailUrl: string;
+}): Promise<boolean> {
+  try {
+    // The HTML value can be a Promise<Blob> — both Chrome and Safari/WebKit
+    // resolve it while keeping the write() call itself tied to the click's
+    // user-activation, which is what lets an async step (fetching +
+    // inlining the thumbnail below) run before the actual clipboard write
+    // completes, without either browser rejecting the write for happening
+    // "too late" after the gesture.
+    const htmlBlobPromise = buildClipboardHtmlBlob({
+      url,
+      title,
+      fileName,
+      thumbnailUrl,
+    });
+    const textBlob = new Blob([`${fileName}: ${url}`], {
+      type: "text/plain",
+    });
+    // Writing both text/html and text/plain lets Gmail/Apple Mail's
+    // rich-content compose box render the card, while anything that only
+    // accepts plain text still gets a sensible fallback.
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": htmlBlobPromise,
+        "text/plain": textBlob,
+      }),
+    ]);
+    toast.success("Formatted card copied — paste into Gmail or Mail");
+    return true;
+  } catch (error) {
+    toast.error(
+      "Couldn't copy formatted card — your browser may not support rich clipboard copy",
+    );
+    return false;
+  }
+}
+
 /**
  * Shown right after creating a document share link. Gives the user two ways
  * to hand the link to someone: the plain URL, or a pre-built HTML "email
@@ -65,38 +121,10 @@ export function ShareLinkReadyModal({
   };
 
   const handleCopyFormatted = async () => {
-    try {
-      // The HTML value can be a Promise<Blob> — both Chrome and Safari/
-      // WebKit resolve it while keeping the write() call itself tied to
-      // this click's user-activation, which is what lets an async step
-      // (fetching + inlining the thumbnail below) run before the actual
-      // clipboard write completes, without either browser rejecting the
-      // write for happening "too late" after the gesture.
-      const htmlBlobPromise = buildClipboardHtmlBlob({
-        url,
-        title,
-        fileName,
-        thumbnailUrl,
-      });
-      const textBlob = new Blob([`${fileName}: ${url}`], {
-        type: "text/plain",
-      });
-      // Writing both text/html and text/plain lets Gmail/Apple Mail's
-      // rich-content compose box render the card, while anything that
-      // only accepts plain text still gets a sensible fallback.
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/html": htmlBlobPromise,
-          "text/plain": textBlob,
-        }),
-      ]);
+    const ok = await copyEmailCardToClipboard({ url, title, fileName, thumbnailUrl });
+    if (ok) {
       setFormattedCopied(true);
-      toast.success("Formatted card copied — paste into Gmail or Mail");
       setTimeout(() => setFormattedCopied(false), 2000);
-    } catch (error) {
-      toast.error(
-        "Couldn't copy formatted card — your browser may not support rich clipboard copy",
-      );
     }
   };
 

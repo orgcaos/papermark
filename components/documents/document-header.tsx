@@ -101,6 +101,7 @@ import { MoveToFolderModal } from "./move-folder-modal";
 import { getFullUrl } from "../links/links-table";
 import {
   ShareLinkReadyModal,
+  copyEmailCardToClipboard,
   type ShareLinkReadyModalData,
 } from "../links/share-link-ready-modal";
 
@@ -798,7 +799,7 @@ export default function DocumentHeader({
                 size="icon"
                 onClick={() => {
                   const link = links[0];
-                  setShareModalData({
+                  const shareData = {
                     url: getFullUrl(link),
                     title: link.name || `Link #${link.id.slice(-5)}`,
                     fileName: ensureFileExtension({
@@ -807,7 +808,13 @@ export default function DocumentHeader({
                       type: primaryVersion.type,
                     }),
                     thumbnailUrl: `${process.env.NEXT_PUBLIC_MARKETING_URL}/api/public/thumbnail/${prismaDocument.id}`,
-                  });
+                  };
+                  setShareModalData(shareData);
+                  // Copy immediately on this click -- same click handler,
+                  // called before any `await`, so the clipboard write stays
+                  // tied to this click's user-activation. Savvas no longer
+                  // has to open the modal and click "Copy formatted" again.
+                  copyEmailCardToClipboard(shareData);
                 }}
                 className="hidden size-8 md:flex lg:size-9"
               >
