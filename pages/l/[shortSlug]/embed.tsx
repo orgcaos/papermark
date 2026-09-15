@@ -25,9 +25,9 @@ function EmbedPageInner(props: ViewPageProps) {
   // The real link id for analytics -- distinct from the shortSlug in the
   // URL, and workflow links carry it under a different prop name.
   const realLinkId =
-    props.linkData.linkType === "WORKFLOW_LINK"
+    props.linkData?.linkType === "WORKFLOW_LINK"
       ? props.linkData.entryLinkId
-      : props.linkData.link?.id;
+      : props.linkData?.link?.id;
 
   useEffect(() => {
     // Only run when router is ready and the real link id is known
