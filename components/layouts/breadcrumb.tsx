@@ -9,6 +9,8 @@ import { useDocument } from "@/lib/swr/use-document";
 import { useFolderWithParents } from "@/lib/swr/use-folders";
 import useViewer from "@/lib/swr/use-viewer";
 
+import { SETTINGS_NAV_ITEMS } from "@/lib/constants/settings-nav";
+
 import { BreadcrumbComponent as DataroomBreadcrumb } from "@/components/datarooms/dataroom-breadcrumb";
 import {
   Breadcrumb,
@@ -246,19 +248,21 @@ const SettingsBreadcrumb = () => {
   const path = router.pathname;
 
   const settingsTitle = useMemo(() => {
+    // The current 5 settings tabs -- same source of truth the tab bar and
+    // mobile menu use, so this can't drift out of sync with them again.
+    const navItem = SETTINGS_NAV_ITEMS.find((item) => item.href === path);
+    if (navItem) return navItem.label;
+
+    // Settings pages that exist but aren't part of that tab set.
     switch (path) {
       case "/settings/general":
         return "General";
       case "/settings/people":
         return "Team";
-      case "/settings/domains":
-        return "Domains";
       case "/settings/presets":
         return "Presets";
       case "/settings/billing":
         return "Billing";
-      case "/settings/billing/invoices":
-        return "Invoices";
       case "/settings/tokens":
         return "API Tokens";
       case "/settings/webhooks":
@@ -267,8 +271,15 @@ const SettingsBreadcrumb = () => {
         return "Slack";
       case "/settings/incoming-webhooks":
         return "Incoming Webhooks";
+      case "/settings/security":
+        return "Security";
+      case "/settings/ai":
+        return "AI";
+      // Anything else -- including a route this list hasn't caught up with
+      // yet -- falls back to just "Settings" alone, never a duplicated
+      // "Settings > Settings" trailing segment.
       default:
-        return "Settings";
+        return null;
     }
   }, [path]);
 
@@ -279,12 +290,12 @@ const SettingsBreadcrumb = () => {
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink asChild>
-            <Link href="/settings/general">Settings</Link>
+            <Link href={SETTINGS_NAV_ITEMS[0].href}>Settings</Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
-        <BreadcrumbSeparator />
         {isInvoicesPage ? (
           <>
+            <BreadcrumbSeparator />
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
                 <Link href="/settings/billing">Billing</Link>
@@ -295,11 +306,14 @@ const SettingsBreadcrumb = () => {
               <BreadcrumbPage>Invoices</BreadcrumbPage>
             </BreadcrumbItem>
           </>
-        ) : (
-          <BreadcrumbItem>
-            <BreadcrumbPage>{settingsTitle}</BreadcrumbPage>
-          </BreadcrumbItem>
-        )}
+        ) : settingsTitle ? (
+          <>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{settingsTitle}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </>
+        ) : null}
       </BreadcrumbList>
     </Breadcrumb>
   );
@@ -455,42 +469,6 @@ const SingleVisitorBreadcrumb = () => {
   );
 };
 
-const AnalyticsBreadcrumb = () => {
-  const router = useRouter();
-  const { type = "links" } = router.query;
-
-  const title = useMemo(() => {
-    switch (type) {
-      case "links":
-        return "Links";
-      case "documents":
-        return "Documents";
-      case "visitors":
-        return "Visitors";
-      case "views":
-        return "Recent Views";
-      default:
-        return "Analytics";
-    }
-  }, [type]);
-
-  return (
-    <Breadcrumb>
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link href="/dashboard?interval=7d&type=links">Dashboard</Link>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{title}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
-  );
-};
-
 export const AppBreadcrumb = () => {
   const router = useRouter();
   const path = router.pathname;
@@ -499,9 +477,9 @@ export const AppBreadcrumb = () => {
   };
 
   const breadcrumb = useMemo(() => {
-    // Analytics routes
+    // Dashboard is the app's root -- no breadcrumb needed.
     if (path === "/dashboard") {
-      return <AnalyticsBreadcrumb />;
+      return null;
     }
 
     // Settings routes
