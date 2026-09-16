@@ -9,6 +9,7 @@ import { getDocumentWithTeamAndUser } from "@/lib/team/helper";
 import {
   getPageDurationsBatch,
   getVideoEventsByDocument,
+  getViewCompletionStats,
   getViewPageDuration,
 } from "@/lib/tinybird";
 import { CustomUser } from "@/lib/types";
@@ -65,10 +66,12 @@ export default async function handle(
               numPages: true,
               type: true,
               versions: {
-                where: { isPrimary: true },
-                orderBy: { createdAt: "desc" },
-                take: 1,
-                select: { numPages: true, length: true },
+                select: {
+                  versionNumber: true,
+                  numPages: true,
+                  isPrimary: true,
+                  length: true,
+                },
               },
               team: {
                 select: {
@@ -107,10 +110,12 @@ export default async function handle(
         },
       });
 
+      const primaryVersion =
+        result.document.versions.find((v) => v.isPrimary) ??
+        result.document.versions[0];
+
       const currentDocNumPages =
-        result?.document?.versions[0]?.numPages ||
-        result?.document?.numPages ||
-        0;
+        primaryVersion?.numPages || result?.document?.numPages || 0;
 
       const pauseStartsAt = result?.document?.team?.pauseStartsAt;
       const pauseEndsAt = result?.document?.team?.pauseEndsAt;
@@ -146,11 +151,14 @@ export default async function handle(
           ? views.slice(0, LIMITS.views)
           : views;
 
-      // A link can be transferred between documents over its lifetime, so a
-      // historical view may reference a *different* document than the one the
-      // link currently points at. Resolve each view's completion rate against
-      // the document that was actually viewed (falling back to the link's
-      // current document) instead of assuming a single page count.
+      // A link can be transferred between documents over its lifetime, and a
+      // single document can also be replaced with a new version that has a
+      // different page count. So a historical view's completion rate has to
+      // be computed against the specific version that was actually viewed
+      // (resolved from Tinybird's per-page-view versionNumber), not against
+      // whatever version happens to be primary/current today -- otherwise a
+      // view of a 76-page v1 shows as e.g. 1500% once a 1-page v2 becomes
+      // current.
       const otherDocumentIds = Array.from(
         new Set(
           limitedViews
@@ -162,10 +170,28 @@ export default async function handle(
         ),
       );
 
-      const numPagesByDocumentId = new Map<string, number>();
-      if (result?.document?.id) {
-        numPagesByDocumentId.set(result.document.id, currentDocNumPages);
-      }
+      // documentId -> versionNumber -> numPages for that exact version.
+      const numPagesByDocumentVersion = new Map<
+        string,
+        Map<number, number>
+      >();
+      // documentId -> numPages of its current/primary version, used as a
+      // fallback when a view's version can't be resolved from Tinybird.
+      const currentNumPagesByDocumentId = new Map<string, number>();
+
+      const indexVersions = (
+        indexDocId: string,
+        versions: { versionNumber: number; numPages: number | null }[],
+      ) => {
+        const versionMap = new Map<number, number>();
+        for (const v of versions) {
+          versionMap.set(v.versionNumber, v.numPages || 0);
+        }
+        numPagesByDocumentVersion.set(indexDocId, versionMap);
+      };
+
+      indexVersions(result.document.id, result.document.versions);
+      currentNumPagesByDocumentId.set(result.document.id, currentDocNumPages);
 
       if (otherDocumentIds.length > 0) {
         const otherDocuments = await prisma.document.findMany({
@@ -174,19 +200,63 @@ export default async function handle(
             id: true,
             numPages: true,
             versions: {
-              where: { isPrimary: true },
-              orderBy: { createdAt: "desc" },
-              take: 1,
-              select: { numPages: true },
+              select: {
+                versionNumber: true,
+                numPages: true,
+                isPrimary: true,
+              },
             },
           },
         });
         for (const doc of otherDocuments) {
-          numPagesByDocumentId.set(
+          indexVersions(doc.id, doc.versions);
+          const docPrimaryVersion =
+            doc.versions.find((v) => v.isPrimary) ?? doc.versions[0];
+          currentNumPagesByDocumentId.set(
             doc.id,
-            doc.versions[0]?.numPages || doc.numPages || 0,
+            docPrimaryVersion?.numPages || doc.numPages || 0,
           );
         }
+      }
+
+      // viewId -> { versionNumber, pagesViewed }, resolved per document from
+      // Tinybird. get_view_completion_stats groups page views by
+      // viewId+versionNumber (unlike get_page_durations_batch below, which
+      // only groups by pageNumber and can't tell versions apart).
+      const completionByViewId = new Map<
+        string,
+        { versionNumber: number; pagesViewed: number }
+      >();
+      try {
+        const completionDocumentIds = Array.from(
+          new Set([result.document.id, ...otherDocumentIds]),
+        );
+        const completionResults = await Promise.all(
+          completionDocumentIds.map((completionDocId) =>
+            getViewCompletionStats({
+              documentId: completionDocId,
+              excludedViewIds: "",
+              since: 0,
+            }),
+          ),
+        );
+        for (const completionResult of completionResults) {
+          for (const row of completionResult.data ?? []) {
+            completionByViewId.set(row.viewId, {
+              versionNumber: row.versionNumber,
+              pagesViewed: row.pages_viewed,
+            });
+          }
+        }
+      } catch (error) {
+        // If this pipe isn't available, fall back to the (less accurate)
+        // current-version page-count comparison further down rather than
+        // failing the whole request -- same fallback philosophy as
+        // getPageDurationsBatch below.
+        console.error(
+          "[visits] getViewCompletionStats failed, falling back to current-version page counts",
+          error,
+        );
       }
 
       const isVideo = result.document.type === "video";
@@ -198,7 +268,7 @@ export default async function handle(
         });
         const countable = countablePlaybackEvents(videoEvents?.data);
         const videoLength = resolveVideoLength(
-          result.document.versions[0]?.length,
+          primaryVersion?.length,
           countable,
         );
 
@@ -262,17 +332,38 @@ export default async function handle(
         }
 
         viewsWithDuration = limitedViews.map((view) => {
-          const viewNumPages = view.documentId
-            ? (numPagesByDocumentId.get(view.documentId) ?? currentDocNumPages)
-            : currentDocNumPages;
           const pageRows = pageRowsByViewId.get(view.id) ?? [];
-          const viewCompletion = viewNumPages
-            ? (pageRows.length / viewNumPages) * 100
-            : 0;
           const totalDuration = pageRows.reduce(
             (sum, data) => sum + data.sum_duration,
             0,
           );
+
+          const completionStat = completionByViewId.get(view.id);
+          let viewCompletion: number;
+          if (completionStat && view.documentId) {
+            const numPages =
+              numPagesByDocumentVersion
+                .get(view.documentId)
+                ?.get(completionStat.versionNumber) ?? 0;
+            viewCompletion = numPages
+              ? (completionStat.pagesViewed / numPages) * 100
+              : 0;
+          } else {
+            // Tinybird completion stats weren't available for this view --
+            // fall back to comparing against the viewed document's current
+            // page count. Less accurate across version changes, but better
+            // than failing outright.
+            const viewNumPages = view.documentId
+              ? (currentNumPagesByDocumentId.get(view.documentId) ??
+                currentDocNumPages)
+              : currentDocNumPages;
+            viewCompletion = viewNumPages
+              ? (pageRows.length / viewNumPages) * 100
+              : 0;
+          }
+          // A view can't have completed more than 100% of the document it
+          // actually viewed -- clamp defensively regardless of source.
+          viewCompletion = Math.min(100, Math.max(0, viewCompletion));
 
           return {
             ...view,
