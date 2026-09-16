@@ -1,35 +1,17 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-import { isReferralsEnabled } from "@/ee/features/partners/lib/referrals";
-import {
-  ChevronLeftIcon,
-  CircleUserRound,
-  GiftIcon,
-  LogOut,
-  MailIcon,
-} from "lucide-react";
-import { signOut, useSession } from "next-auth/react";
-import { toast } from "sonner";
+import { useState } from "react";
+
+import { ChevronLeftIcon, MoreHorizontalIcon } from "lucide-react";
 
 import { useDataroom } from "@/lib/swr/use-dataroom";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-import { ModeToggle } from "../theme-toggle";
+import { MobileMoreMenu } from "./mobile-more-menu";
 
 export function MobileHeader() {
-  const { data: session } = useSession();
   const router = useRouter();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const inDataroom =
     router.pathname.startsWith("/datarooms/[id]") && !!router.query.id;
@@ -60,102 +42,22 @@ export function MobileHeader() {
           </Link>
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarImage
-                  src={session?.user?.image || ""}
-                  alt={session?.user?.name || ""}
-                />
-                <AvatarFallback className="text-xs">
-                  {session?.user?.name?.charAt(0) ||
-                    session?.user?.email?.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            collisionPadding={{
-              top: 8,
-              bottom: 8,
-              left: 12,
-              right: 12,
-            }}
-            className="w-56 rounded-lg"
-            side="bottom"
-            align="end"
-            sideOffset={8}
-          >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-2 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage
-                    src={session?.user?.image || ""}
-                    alt={session?.user?.name || ""}
-                  />
-                  <AvatarFallback className="rounded-lg">
-                    {session?.user?.name?.charAt(0) ||
-                      session?.user?.email?.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">
-                    {session?.user?.name || ""}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {session?.user?.email || ""}
-                  </span>
-                </div>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <ModeToggle />
-            <DropdownMenuGroup>
-              <Link href="/account/general">
-                <DropdownMenuItem>
-                  <CircleUserRound className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-              </Link>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                onClick={() => {
-                  navigator.clipboard.writeText("savvastheodosiou@gmail.com");
-                  toast.success("savvastheodosiou@gmail.com copied to clipboard");
-                }}
-              >
-                <MailIcon className="mr-2 h-4 w-4" />
-                Contact Support
-              </DropdownMenuItem>
-              {isReferralsEnabled() ? (
-                <Link href="/partners">
-                  <DropdownMenuItem>
-                    <GiftIcon className="mr-2 h-4 w-4" />
-                    Earn and Refer
-                  </DropdownMenuItem>
-                </Link>
-              ) : null}
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() =>
-                signOut({
-                  callbackUrl: `${window.location.origin}`,
-                })
-              }
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* "More" used to live in the bottom nav; it moved up here (replacing
+            the old avatar/account dropdown) so it's reachable from every
+            screen without taking a bottom-nav slot. Settings, theme, and
+            log out -- previously in that dropdown -- now live inside the
+            More sheet itself (components/layouts/mobile-more-menu.tsx). */}
+        <button
+          type="button"
+          onClick={() => setMoreOpen(true)}
+          aria-label="More"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <MoreHorizontalIcon className="h-5 w-5" />
+        </button>
       </div>
+
+      <MobileMoreMenu open={moreOpen} onClose={() => setMoreOpen(false)} />
     </header>
   );
 }

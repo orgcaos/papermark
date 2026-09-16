@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import useSWR from "swr";
 
 import { useEntryRedirect } from "@/lib/hooks/use-last-visited";
+import { useMediaQuery } from "@/lib/utils/use-media-query";
 import { usePlan } from "@/lib/swr/use-billing";
 import { fetcher } from "@/lib/utils";
 
@@ -73,6 +74,7 @@ export default function DashboardPage() {
   // On platform entry, route the user back to where they last were (Option 2).
   const isRedirecting = useEntryRedirect();
   const teamInfo = useTeam();
+  const { isMobile } = useMediaQuery();
   const { plan, trial } = usePlan();
   const slug = useRef<boolean>(false);
   const [customRange, setCustomRange] = useState<{
@@ -98,7 +100,9 @@ export default function DashboardPage() {
     router.query.interval,
   )
     ? router.query.interval
-    : "30d";
+    : isMobile
+      ? "7d"
+      : "30d";
 
   const {
     data: overview,

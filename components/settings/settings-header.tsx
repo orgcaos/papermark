@@ -1,3 +1,5 @@
+import { SETTINGS_NAV_ITEMS } from "@/lib/constants/settings-nav";
+
 import { NavMenu } from "../navigation-menu";
 
 export function SettingsHeader() {
@@ -14,40 +16,7 @@ export function SettingsHeader() {
         </div>
       </section>
 
-      <NavMenu
-        navigation={[
-          {
-            label: "User Account",
-            href: `/settings/account`,
-            segment: "account",
-          },
-          {
-            label: "Domains",
-            href: `/settings/domains`,
-            segment: "domains",
-          },
-          {
-            label: "Presets",
-            href: `/settings/presets`,
-            segment: "presets",
-          },
-          {
-            label: "Tags",
-            href: `/settings/tags`,
-            segment: "tags",
-          },
-          {
-            label: "Agreements",
-            href: `/settings/agreements`,
-            segment: "agreements",
-          },
-          {
-            label: "Notifications",
-            href: `/settings/notifications`,
-            segment: "notifications",
-          },
-        ]}
-      />
+      <NavMenu navigation={[...SETTINGS_NAV_ITEMS]} />
     </header>
   );
 }
