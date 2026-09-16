@@ -95,6 +95,7 @@ export default async function handle(
               numPages: true,
               type: true,
               length: true,
+              isPrimary: true,
             },
           },
           _count: {
@@ -177,7 +178,11 @@ export default async function handle(
         (view) => !excludedViewIdSet.has(view.id),
       );
 
-      const [duration, totalDocumentDuration] = await Promise.all([
+      const currentVersion =
+        document.versions.find((version) => version.isPrimary) ??
+        document.versions[0];
+
+      const [rawDuration, totalDocumentDuration] = await Promise.all([
         getTotalAvgPageDuration({
           documentId: docId,
           excludedLinkIds: "",
@@ -252,6 +257,19 @@ export default async function handle(
             completionRates.length;
         }
       }
+
+      // Only keep page-duration rows for the version that's current today --
+      // rows from an old version with a very different page count would
+      // otherwise extend/garble the chart's page-number axis (see comment
+      // above currentVersion).
+      const duration = {
+        ...rawDuration,
+        data: currentVersion
+          ? rawDuration.data.filter(
+              (row) => row.versionNumber === currentVersion.versionNumber,
+            )
+          : rawDuration.data,
+      };
 
       const stats = {
         views: filteredViews,
