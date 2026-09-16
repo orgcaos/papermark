@@ -10,6 +10,7 @@ import AppLayout from "@/components/layouts/app";
 import { Separator } from "@/components/ui/separator";
 
 import { useFolder, useFolderDocuments } from "@/lib/swr/use-documents";
+import { useFolderWithParents } from "@/lib/swr/use-folders";
 
 export default function DocumentTreePage() {
   const router = useRouter();
@@ -19,12 +20,18 @@ export default function DocumentTreePage() {
   const { documents, loading } = useFolderDocuments({ name });
   const teamInfo = useTeam();
 
-  // This route is always inside a folder (the root listing lives at
-  // /documents), so the last path segment is this folder's own name --
-  // folder paths are materialized directly from folder names (see
-  // pages/api/teams/[teamId]/folders/[...name].ts), so no separate
-  // lookup is needed just to display it.
-  const folderName = name?.[name.length - 1] ?? "Documents";
+  // The last URL segment is a slug (e.g. "services-book-cap-deck"), not the
+  // folder's actual display name (e.g. "Services Book - Cap Deck") -- those
+  // can differ once a folder is renamed, since the materialized `path` isn't
+  // re-slugified from `name` after creation. useFolderWithParents resolves
+  // the real chain of {name, path} from the database (the same call the
+  // breadcrumb above this page already makes), so use its last entry as the
+  // H1 instead of the raw route param.
+  const { folders: folderChain } = useFolderWithParents({ name });
+  const folderName =
+    folderChain?.[folderChain.length - 1]?.name ??
+    name?.[name.length - 1] ??
+    "Documents";
 
   return (
     <AppLayout>
