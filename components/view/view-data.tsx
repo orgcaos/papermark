@@ -30,24 +30,52 @@ import {
 import { useMediaQuery } from "@/lib/utils/use-media-query";
 
 import { DEFAULT_DOCUMENT_VIEW_TYPE } from "@/components/view/document-view";
-import { NotionPage } from "@/components/view/viewer/notion-page";
 import PDFViewer from "@/components/view/viewer/pdf-default-viewer";
 
 import { DEFAULT_DATAROOM_DOCUMENT_VIEW_TYPE } from "./dataroom/dataroom-document-view";
 import LinkPreview from "./link-preview";
 import { TNavData } from "./nav";
-import AdvancedExcelViewer from "./viewer/advanced-excel-viewer";
-import DownloadOnlyViewer from "./viewer/download-only-viewer";
-import HtmlViewer from "./viewer/html-viewer";
-import ImageViewer from "./viewer/image-viewer";
 import PagesHorizontalViewer from "./viewer/pages-horizontal-viewer";
 import PagesVerticalViewer from "./viewer/pages-vertical-viewer";
-import VideoViewer from "./viewer/video-viewer";
 
+// Most views are plain PDFs, handled by PagesHorizontalViewer /
+// PagesVerticalViewer / PDFViewer above -- those stay eagerly imported so
+// their code starts downloading in parallel with the initial /api/views
+// call instead of only after it resolves. The viewers below only ever
+// render for a small minority of document types, but were previously
+// imported just as eagerly, so every visitor -- including one opening a
+// plain PDF -- downloaded video playback, Notion's renderer, the advanced
+// Excel embed, etc. up front. Loading them lazily (matching the existing
+// ExcelViewer pattern) keeps that weight out of the bundle everyone pays
+// for and only fetches it for the document type that actually needs it.
+const AdvancedExcelViewer = dynamic(
+  () => import("./viewer/advanced-excel-viewer"),
+  { ssr: false },
+);
+const DownloadOnlyViewer = dynamic(
+  () => import("./viewer/download-only-viewer"),
+  { ssr: false },
+);
 const ExcelViewer = dynamic(
   () => import("@/components/view/viewer/excel-viewer"),
   { ssr: false },
 );
+const HtmlViewer = dynamic(() => import("./viewer/html-viewer"), {
+  ssr: false,
+});
+const ImageViewer = dynamic(() => import("./viewer/image-viewer"), {
+  ssr: false,
+});
+const NotionPage = dynamic(
+  () =>
+    import("@/components/view/viewer/notion-page").then(
+      (mod) => mod.NotionPage,
+    ),
+  { ssr: false },
+);
+const VideoViewer = dynamic(() => import("./viewer/video-viewer"), {
+  ssr: false,
+});
 
 export type TViewDocumentData = Document & {
   versions: DocumentVersion[];
