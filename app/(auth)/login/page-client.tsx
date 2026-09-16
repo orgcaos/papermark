@@ -44,14 +44,14 @@ export default function Login() {
 
   return (
     <div className="flex h-screen w-full flex-wrap">
-      <div className="flex w-full justify-center bg-white">
-        <div className="z-10 mx-5 mt-0 h-fit w-full max-w-md overflow-hidden sm:mx-0 sm:mt-[calc(0.5vh)] md:mt-[calc(1vh)]">
+      <div className="flex h-full w-full items-center justify-center bg-white">
+        <div className="z-10 mx-5 h-fit w-full max-w-md overflow-hidden sm:mx-0">
           <div className="items-left flex flex-col space-y-3 px-4 py-6 pt-5 sm:px-12 sm:pt-6">
             <Link href="/">
               <img
                 src="/_static/orgcaos-logo.svg"
                 alt="Orgcaos Docket"
-                className="mb-24 h-7 w-auto self-start sm:mb-20"
+                className="mb-24 h-[37.625rem] w-full max-w-full object-contain sm:mb-20"
               />
             </Link>
             <Link href="/">
