@@ -111,10 +111,16 @@ export default async function handle(
               },
             },
           },
-          // Get counts without fetching full records
+          // Get counts without fetching full records. `links` is scoped
+          // to non-deleted links (same `deletedAt: null` filter the links
+          // table's own query uses in .../documents/[id]/links.ts) so this
+          // count can't drift from what the links table actually shows --
+          // it previously counted every Link row ever created for this
+          // document, deleted ones included, e.g. showing "5 share links"
+          // here while the links table itself showed only 3.
           _count: {
             select: {
-              links: true,
+              links: { where: { deletedAt: null } },
               views: { where: { isArchived: false } },
               versions: true,
             },

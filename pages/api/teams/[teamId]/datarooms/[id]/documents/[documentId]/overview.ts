@@ -158,9 +158,13 @@ export default async function handle(
                 },
               },
             },
+            // `links` scoped to non-deleted links, same as the
+            // document-level overview endpoint (.../documents/[id]/overview.ts)
+            // and the links table's own query -- otherwise this count can
+            // include deleted links the links table itself never shows.
             _count: {
               select: {
-                links: true,
+                links: { where: { deletedAt: null } },
                 views: { where: { isArchived: false } },
                 versions: true,
               },
