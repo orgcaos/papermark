@@ -770,6 +770,7 @@ export default function DocumentHeader({
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Copy email card"
                 onClick={() => {
                   const link = links[0];
                   const shareData = {
@@ -807,6 +808,7 @@ export default function DocumentHeader({
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label="AI Agents Settings"
                   className="hidden size-8 md:flex lg:size-9"
                   onClick={() => setAiDialogOpen(true)}
                 >
@@ -818,6 +820,7 @@ export default function DocumentHeader({
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label={enablingAI ? "Enabling AI Agents" : "Enable AI Agents"}
                   className="hidden size-8 md:flex lg:size-9"
                   onClick={enableAIAgents}
                   disabled={enablingAI}
