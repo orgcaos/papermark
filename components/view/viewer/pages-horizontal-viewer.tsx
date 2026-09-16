@@ -1,4 +1,5 @@
 import { useRouter } from "next/router";
+import dynamic from "next/dynamic";
 
 import React, { useEffect, useRef, useState } from "react";
 
@@ -33,7 +34,6 @@ import { PoweredBy } from "../powered-by";
 import Question from "../question";
 import Toolbar from "../toolbar";
 import { ViewerThemeColor } from "../viewer-theme-color";
-import ViewDurationSummary from "../visitor-graph";
 import { AwayPoster } from "./away-poster";
 import { FullscreenControls } from "./fullscreen-controls";
 import {
@@ -43,6 +43,20 @@ import {
 import { MobilePageControls } from "./mobile-page-controls";
 
 import "@/styles/custom-viewer-styles.css";
+
+// ViewDurationSummary (visitor-graph.tsx) pulls in @tremor/react's
+// BarChart, which is built on recharts -- a real, sizeable dependency
+// (300KB+), not a stray import. It only ever renders for the rare
+// "account creation" slide (isAccountSlide /
+// showStatsSlideWithAccountCreation below), not for a normal document
+// view, so it was previously forcing every visitor -- including the
+// overwhelming majority who never see that slide -- to download a
+// charting library up front. Lazy-loading it keeps that weight out of
+// the critical viewer bundle, fetched only if/when that slide actually
+// renders.
+const ViewDurationSummary = dynamic(() => import("../visitor-graph"), {
+  ssr: false,
+});
 
 export default function PagesHorizontalViewer({
   pages,
