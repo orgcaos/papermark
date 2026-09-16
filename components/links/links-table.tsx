@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useTeam } from "@/context/team-context";
 import { InviteViewersModal } from "@/ee/features/dataroom-invitations/components/invite-viewers-modal";
@@ -44,7 +44,6 @@ import useLimits from "@/lib/swr/use-limits";
 import { LinkWithViews, WatermarkConfig } from "@/lib/types";
 import { cn, copyToClipboard, nFormatter, timeAgo } from "@/lib/utils";
 import { ensureFileExtension } from "@/lib/utils/get-content-type";
-import { useMediaQuery } from "@/lib/utils/use-media-query";
 
 import { UpgradePlanModal } from "@/components/billing/upgrade-plan-modal";
 import { Button } from "@/components/ui/button";
@@ -62,9 +61,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -86,9 +82,6 @@ import { Label } from "../ui/label";
 import { ButtonTooltip } from "../ui/tooltip";
 import { useDeleteLinkModal } from "./delete-link-modal";
 import EmbedCodeModal from "./embed-code-modal";
-import LinkActiveControls, {
-  countActiveSettings,
-} from "./link-active-controls";
 import LinkSheet, {
   DEFAULT_LINK_PROPS,
   type DEFAULT_LINK_TYPE,
@@ -260,6 +253,7 @@ const LinkActionsCell = ({
         <Button
           variant="ghost"
           size="icon"
+          aria-label={copied ? "Copied" : "Copy link"}
           className="h-8 w-8 transition-colors hover:text-foreground group-hover/link:bg-emerald-500/10 group-hover/link:hover:bg-emerald-500/20"
           onClick={handleCopy}
         >
@@ -276,6 +270,7 @@ const LinkActionsCell = ({
         <Button
           variant="ghost"
           size="icon"
+          aria-label={isProcessing ? "Preparing preview" : "Preview link"}
           className="h-8 w-8 hover:text-foreground"
           onClick={handlePreview}
           disabled={isProcessing}
@@ -292,6 +287,7 @@ const LinkActionsCell = ({
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Copy email card"
             className="h-8 w-8 hover:text-foreground"
             onClick={handleShareCard}
           >
@@ -304,6 +300,7 @@ const LinkActionsCell = ({
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Invite via email"
             className="h-8 w-8 hover:text-foreground"
             onClick={handleInvite}
           >
@@ -351,7 +348,6 @@ export default function LinksTable({
     groupId?: string;
   };
 
-  const { isMobile } = useMediaQuery();
   const { isFeatureEnabled } = useFeatureFlags();
   const canInviteViewers =
     isDataroomsPlus ||
@@ -409,8 +405,6 @@ export default function LinksTable({
     domain?: string | null;
     slug?: string | null;
   } | null>(null);
-  const [popoverOpen, setPopoverOpen] = useState<string | null>(null);
-  const hoverTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // When true, the dataroom link sheet opens straight into the file
   // permissions panel (triggered from the "Edit file permissions" action).
@@ -750,7 +744,6 @@ export default function LinksTable({
                     key={link.id}
                     className={cn(
                       "group/row",
-                      popoverOpen === link.id && "bg-gray-100",
                       link.isArchived &&
                         "bg-gray-50 opacity-50 dark:bg-gray-700",
                     )}
@@ -828,7 +821,6 @@ export default function LinksTable({
                           isProcessing={isDocumentProcessing(primaryVersion)}
                           primaryVersion={primaryVersion}
                           mutateDocument={mutateDocument}
-                          isPopoverOpen={popoverOpen === link.id}
                         />
                         <div className="flex shrink-0 items-center">
                           <LinkActionsCell
@@ -863,84 +855,21 @@ export default function LinksTable({
                             isDataroom={isDataroom}
                             canInvite={canInviteViewers}
                           />
-                          {isMobile ? (
-                            <ButtonTooltip content="Edit link">
-                              <Button
-                                variant="link"
-                                size="icon"
-                                className="group h-8 w-8"
-                                onClick={() => handleEditLink(link)}
-                              >
-                                <span className="sr-only">Edit link</span>
-                                <Settings2Icon className="text-gray-400 group-hover:text-gray-500" />
-                              </Button>
-                            </ButtonTooltip>
-                          ) : (
-                            <Popover
-                              open={popoverOpen === link.id}
-                              onOpenChange={() => {}}
+                          {/* Previously a hover-triggered "Active Link
+                              Controls" popover *and* a click handler that
+                              opened the Edit sheet -- both fired at once on
+                              click. Now this only ever opens the Edit sheet. */}
+                          <ButtonTooltip content="Edit link">
+                            <Button
+                              variant="link"
+                              size="icon"
+                              className="group h-8 w-8"
+                              onClick={() => handleEditLink(link)}
                             >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="link"
-                                  className={cn(
-                                    "h-8 w-8 font-normal hover:no-underline focus-visible:ring-0 focus-visible:ring-offset-0",
-                                    popoverOpen === link.id
-                                      ? "text-foreground"
-                                      : "text-muted-foreground hover:text-foreground",
-                                  )}
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    handleEditLink(link);
-                                  }}
-                                  onMouseDown={(e) => e.preventDefault()}
-                                  onMouseEnter={() => {
-                                    hoverTimeout.current = setTimeout(
-                                      () => setPopoverOpen(link.id),
-                                      250,
-                                    );
-                                  }}
-                                  onMouseLeave={() => {
-                                    if (hoverTimeout.current)
-                                      clearTimeout(hoverTimeout.current);
-                                    hoverTimeout.current = setTimeout(
-                                      () => setPopoverOpen(null),
-                                      100,
-                                    );
-                                  }}
-                                >
-                                  <Settings2Icon />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                side="top"
-                                align="start"
-                                className="w-56 p-0"
-                                onMouseEnter={() => {
-                                  if (hoverTimeout.current)
-                                    clearTimeout(hoverTimeout.current);
-                                  setPopoverOpen(link.id);
-                                }}
-                                onMouseLeave={() => {
-                                  if (hoverTimeout.current)
-                                    clearTimeout(hoverTimeout.current);
-                                  hoverTimeout.current = setTimeout(
-                                    () => setPopoverOpen(null),
-                                    100,
-                                  );
-                                }}
-                              >
-                                <LinkActiveControls
-                                  link={link}
-                                  onEditClick={(e) => {
-                                    e.preventDefault();
-                                    handleEditLink(link);
-                                  }}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          )}
+                              <span className="sr-only">Edit link</span>
+                              <Settings2Icon className="text-gray-400 group-hover:text-gray-500" />
+                            </Button>
+                          </ButtonTooltip>
                           {/* File permissions icon (dataroom only) */}
                           {isDataroom && (
                             <div className="flex w-8 items-center justify-center">
