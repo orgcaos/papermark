@@ -208,7 +208,7 @@ export function ShareLinkReadyModal({
 // document name), and the second line shows the file name as clickable
 // text instead of the raw URL -- both changed 2026-09-14 per Savvas's
 // feedback. Thumbnail keeps the document's natural aspect ratio, bounded
-// by a 96x96 box instead of a forced 1:1 crop -- changed 2026-09-15 per
+// by a 108x108 box instead of a forced 1:1 crop -- changed 2026-09-15 per
 // Savvas's feedback. A symmetric box (rather than a wide-but-short one)
 // means a landscape document (e.g. 16:9 slides) renders noticeably bigger
 // than a portrait one, since only the portrait case is height-limited --
@@ -218,15 +218,21 @@ export function ShareLinkReadyModal({
 // ported back verbatim (2026-09-15): accent color #904F44 (border, filename
 // link, replacing the earlier #BB5E4E border / blue #2563eb filename link),
 // off-white #FBFBF9 background (was pure white), 6px card corners / 5px
-// thumbnail corners (was 8px/6px), larger title (20px) and filename (14px)
-// text. The thumbnail cell's padding was also bumped to 18px, and -- this
-// was the actual bug Savvas caught -- its old fixed `width:112px` was
-// dropped entirely: that width hint was smaller than the thumbnail's
-// content box on a wide (landscape) image but larger than it on a narrow
-// (portrait) one, so the gap between the thumbnail and the text was
-// inconsistent (tight on landscape, loose on portrait). Letting the cell
-// size purely from its padding + the image's own (already-capped) width
-// makes the gap constant regardless of the thumbnail's aspect ratio.
+// thumbnail corners (was 8px/6px). The thumbnail cell's padding was bumped
+// to 18px, and -- this was the actual bug Savvas caught -- its old fixed
+// `width:112px` was dropped entirely: that width hint was smaller than the
+// thumbnail's content box on a wide (landscape) image but larger than it
+// on a narrow (portrait) one, so the gap between the thumbnail and the
+// text was inconsistent (tight on landscape, loose on portrait). Letting
+// the cell size purely from its padding + the image's own (already-capped)
+// width makes the gap constant regardless of the thumbnail's aspect ratio.
+//
+// Sized up and tightened again (2026-09-17) per Savvas's feedback: overall
+// card max-width 400px -> 440px and the thumbnail box 96x96 -> 108x108
+// (both "a bit bigger"), thumbnail cell padding 18px -> 14px and text cell
+// padding 12/16/12/0 -> 10/14/10/0 ("a bit less padding"), title 20px ->
+// 18px ("a tiny bit smaller"). `fetchThumbnailAsDataUrl`'s retina encode
+// target bumped 192 -> 216 (still 2x the display box) to match.
 function buildEmailCardHtml({
   url,
   title,
@@ -265,12 +271,12 @@ function buildEmailCardHtml({
   // that is) plus its own padding, exactly as before, it just no longer
   // also absorbs half the table's free space.
   return (
-    `<table style="max-width:400px;width:100%;border:1.5px solid #904F44;border-radius:6px;background-color:#FBFBF9;box-shadow:none;border-collapse:separate;border-spacing:0" cellpadding="0" cellspacing="0"><tbody>` +
+    `<table style="max-width:440px;width:100%;border:1.5px solid #904F44;border-radius:6px;background-color:#FBFBF9;box-shadow:none;border-collapse:separate;border-spacing:0" cellpadding="0" cellspacing="0"><tbody>` +
     `<tr>` +
-    `<td style="padding:18px;width:1%;white-space:nowrap" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" style="display:block;max-width:96px;max-height:96px;width:auto;height:auto;border-radius:5px;border:0" /></a></td>` +
-    `<td style="padding:12px 16px 12px 0" valign="middle">` +
-    `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:20px;line-height:1.25;font-weight:bold;text-decoration:none">${escapedTitle}</a>` +
-    `<a href="${url}" target="_blank" style="display:block;margin-top:10px;color:#904F44;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.25;text-decoration:underline;word-break:break-all">${escapedFileName}</a>` +
+    `<td style="padding:14px;width:1%;white-space:nowrap" valign="top"><a href="${url}" target="_blank" style="text-decoration:none"><img alt="${escapedTitle}" src="${thumbnailUrl}" style="display:block;max-width:108px;max-height:108px;width:auto;height:auto;border-radius:5px;border:0" /></a></td>` +
+    `<td style="padding:10px 14px 10px 0" valign="middle">` +
+    `<a href="${url}" target="_blank" style="display:block;color:#1a1f36;font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:1.25;font-weight:bold;text-decoration:none">${escapedTitle}</a>` +
+    `<a href="${url}" target="_blank" style="display:block;margin-top:8px;color:#904F44;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.25;text-decoration:underline;word-break:break-all">${escapedFileName}</a>` +
     `</td>` +
     `</tr>` +
     `</tbody></table>`
@@ -320,7 +326,7 @@ async function fetchThumbnailAsDataUrl(url: string): Promise<string | null> {
     const blob = await response.blob();
 
     const bitmap = await createImageBitmap(blob);
-    const maxDim = 192; // 2x the card's 96px display box, for retina
+    const maxDim = 216; // 2x the card's 108px display box, for retina
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
