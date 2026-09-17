@@ -1,0 +1,18 @@
+.rockingHorse {
+  animation: slide 2.2s cubic-bezier(0.38, 0, 0.67, -0.15) infinite alternate;
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-14px);
+  }
+  100% {
+    transform: translateX(14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rockingHorse {
+    animation: none;
+  }
+}

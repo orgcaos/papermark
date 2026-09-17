@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import LoadingSpinner from "@/components/ui/loading-spinner";
+import RockingHorseIcon from "@/components/ui/rocking-horse-icon";
 
 // Shows the document's real first page immediately, instead of a blank
 // spinner, while the viewer's JS bundle loads and /api/views resolves.
@@ -24,15 +24,21 @@ import LoadingSpinner from "@/components/ui/loading-spinner";
 // avoid that duplicate fetch; doing so would mean touching the core PDF
 // viewer's page-loading logic, which is out of scope for this change.
 //
-// Falls back to a plain spinner if the thumbnail 404s or fails to load --
-// video, sheet, HTML, and Notion documents have no static first-page image
-// yet (see pages/api/public/thumbnail/[documentId].ts), and any other
-// image load failure degrades the same way.
+// While the thumbnail is still loading, a rocking-horse SVG (RockingHorseIcon)
+// is shown centered on the background in its place -- the <img> stays in the
+// DOM the whole time (so the preload scanner still picks it up immediately),
+// just visually hidden via CSS until onLoad fires, at which point the horse
+// is swapped out for the now-loaded image. If the thumbnail 404s or fails to
+// load, the horse stays as the permanent fallback -- video, sheet, HTML, and
+// Notion documents have no static first-page image yet (see
+// pages/api/public/thumbnail/[documentId].ts), and any other image load
+// failure degrades the same way.
 export default function ViewerLoadingCover({
   documentId,
 }: {
   documentId: string;
 }) {
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
 
   return (
@@ -47,13 +53,17 @@ export default function ViewerLoadingCover({
           src={`/api/public/thumbnail/${documentId}`}
           alt=""
           aria-hidden="true"
+          onLoad={() => setImageLoaded(true)}
           onError={() => setImageFailed(true)}
           className="h-full w-full object-contain"
+          style={{ visibility: imageLoaded ? "visible" : "hidden" }}
         />
       ) : null}
-      <div className="absolute inset-x-0 bottom-10 flex justify-center">
-        <LoadingSpinner className="h-8 w-8" />
-      </div>
+      {!imageLoaded || imageFailed ? (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <RockingHorseIcon className="h-16 w-auto" />
+        </div>
+      ) : null}
     </div>
   );
 }
