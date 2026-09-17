@@ -32,6 +32,7 @@ import {
 } from "@/lib/types";
 
 import LoadingSpinner from "@/components/ui/loading-spinner";
+import RockingHorseIcon from "@/components/ui/rocking-horse-icon";
 import CustomMetaTag from "@/components/view/custom-metatag";
 import DataroomView from "@/components/view/dataroom/dataroom-view";
 import DocumentView from "@/components/view/document-view";
@@ -385,8 +386,8 @@ function ViewPageInner({
 
   if (router.isFallback) {
     return (
-      <div className="flex h-screen items-center justify-center bg-black">
-        <LoadingSpinner className="h-20 w-20" />
+      <div className="flex h-screen items-center justify-center bg-gray-950">
+        <RockingHorseIcon className="h-32 w-auto" />
       </div>
     );
   }
@@ -453,8 +454,8 @@ function ViewPageInner({
             imageUrl={meta.metaImage ?? null}
             url={meta.metaUrl ?? ""}
           />
-          <div className="flex h-screen items-center justify-center">
-            <LoadingSpinner className="h-20 w-20" />
+          <div className="flex h-screen items-center justify-center bg-gray-950">
+            <RockingHorseIcon className="h-32 w-auto" />
           </div>
         </>
       );

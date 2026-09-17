@@ -43,21 +43,16 @@ export default function RockingHorseIcon({
           d="M157.688 32.9812C160.088 32.9812 162.032 31.0363 162.032 28.6371C162.032 26.2379 160.088 24.293 157.688 24.293C155.289 24.293 153.344 26.2379 153.344 28.6371C153.344 31.0363 155.289 32.9812 157.688 32.9812Z"
           fill="#131720"
         />
-        <mask
-          id="rocking-horse-blanket-mask"
-          style={{ maskType: "luminance" }}
-          maskUnits="userSpaceOnUse"
-          x="23"
-          y="36"
-          width="130"
-          height="66"
-        >
-          <path
-            d="M152.971 101.043C152.971 65.3559 124.041 36.4258 88.3533 36.4258C52.6659 36.4258 23.7358 65.3559 23.7358 101.043H152.971Z"
-            fill="white"
-          />
-        </mask>
-        <g mask="url(#rocking-horse-blanket-mask)">
+        {/* A clipPath, not a <mask>: this is a solid geometric shape (no
+        luminance gradient), so a clipPath gives the identical visual result
+        -- and unlike <mask>, it doesn't hit the long-standing Safari/WebKit
+        bug where masked SVG content rasterizes at a fixed, non-Retina-aware
+        resolution and looks blurry/pixelated on HiDPI screens, which is
+        exactly what made the doubled-size icon look pixelated. */}
+        <clipPath id="rocking-horse-blanket-clip">
+          <path d="M152.971 101.043C152.971 65.3559 124.041 36.4258 88.3533 36.4258C52.6659 36.4258 23.7358 65.3559 23.7358 101.043H152.971Z" />
+        </clipPath>
+        <g clipPath="url(#rocking-horse-blanket-clip)">
           <path
             d="M77.7537 18.2048C81.1674 17.6667 84.7607 17.3066 88.5329 17.3066C95.1814 17.3066 101.468 18.564 107.576 20.3603V67.3239V71.9422V79.6197H104.322V71.9422H100.538V79.6197H97.2834V71.9422H93.5002V79.6197H90.2456V71.9422H86.4617V79.6197H83.2071V71.9422H79.4231V79.6197H76.1686V71.9422H72.3854V79.6197H69.1309V71.9422V67.3239V20.1807C72.0049 19.2825 74.8797 18.7444 77.7537 18.2048Z"
             fill="#BC5E4E"
