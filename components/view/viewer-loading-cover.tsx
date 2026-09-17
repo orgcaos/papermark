@@ -61,7 +61,7 @@ export default function ViewerLoadingCover({
       ) : null}
       {!imageLoaded || imageFailed ? (
         <div className="absolute inset-0 flex items-center justify-center">
-          <RockingHorseIcon className="h-16 w-auto" />
+          <RockingHorseIcon className="h-32 w-auto" />
         </div>
       ) : null}
     </div>
