@@ -11,7 +11,7 @@ import { useAnalytics } from "@/lib/analytics";
 import { useDisablePrint } from "@/lib/hooks/use-disable-print";
 import { LinkWithDocument, NotionTheme } from "@/lib/types";
 
-import LoadingSpinner from "@/components/ui/loading-spinner";
+import ViewerLoadingCover from "@/components/view/viewer-loading-cover";
 import AccessForm, {
   DEFAULT_ACCESS_FORM_DATA,
   DEFAULT_ACCESS_FORM_TYPE,
@@ -332,9 +332,7 @@ export default function DocumentView({
     return (
       <>
         <ViewerThemeColor color={brand?.accentColor} />
-        <div className="flex h-screen items-center justify-center">
-          <LoadingSpinner className="h-20 w-20" />
-        </div>
+        <ViewerLoadingCover documentId={document.id} />
       </>
     );
   }
@@ -364,9 +362,7 @@ export default function DocumentView({
             previewToken={previewToken}
           />
         ) : (
-          <div className="flex h-screen items-center justify-center">
-            <LoadingSpinner className="h-20 w-20" />
-          </div>
+          <ViewerLoadingCover documentId={document.id} />
         )}
       </div>
     </>
