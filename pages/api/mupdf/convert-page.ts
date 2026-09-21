@@ -122,37 +122,54 @@ async function renderPageWithPoppler(
   }
 }
 
-// Classic 8x8 Bayer ordered-dither threshold matrix (values 0-63). Tiled
-// across the image, it gives each pixel a small, deterministic offset that
-// breaks up hard color steps without adding visible grain or requiring a
-// per-pixel RNG call (fast: ~50ms for a 2000x1125 page).
-const BAYER_8X8 = [
-  [0, 32, 8, 40, 2, 34, 10, 42],
-  [48, 16, 56, 24, 50, 18, 58, 26],
-  [12, 44, 4, 36, 14, 46, 6, 38],
-  [60, 28, 52, 20, 62, 30, 54, 22],
-  [3, 35, 11, 43, 1, 33, 9, 41],
-  [51, 19, 59, 27, 49, 17, 57, 25],
-  [15, 47, 7, 39, 13, 45, 5, 37],
-  [63, 31, 55, 23, 61, 29, 53, 21],
-];
+// Deterministic per-pixel PRNG (mulberry32) used for dithering below. Not
+// cryptographic -- just needs to be fast and to not repeat in a visible
+// pattern over a page-sized image.
+function mulberry32(seed: number): () => number {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
-// Applies a subtle Bayer dither to every color channel of a rendered
-// pixmap, in place. Very gentle/long color gradients (common in flattened
-// background illustrations exported from design tools) can't be
+// Applies a subtle per-pixel random dither to every color channel of a
+// rendered pixmap, in place. Very gentle/long color gradients (common in
+// flattened background illustrations exported from design tools) can't be
 // represented smoothly in 8-bit color and render with visible stepped
-// banding -- confirmed this is true across different PDF renderers
-// (mupdf and poppler both show identical banding on the same source
-// gradient), so it isn't a corruption/decoder issue like the one above,
-// just an 8-bit precision limit. A tiny amount of dither noise
-// decorrelates the quantization error that otherwise shows up as hard
-// color steps. Pixmap.getPixels() returns a live view into mupdf's own
-// pixel buffer (confirmed empirically -- mutating it changes what
-// asPNG()/asJPEG() subsequently encode), so no copy/re-set step is
-// needed. See build-status.md, 2026-09-21, for the investigation.
+// banding -- confirmed this is true across different PDF renderers (mupdf
+// and poppler both show identical banding on the same source gradient), so
+// it isn't a corruption/decoder issue like the one above, just an 8-bit
+// precision limit.
+//
+// An earlier version of this function used a classic 8x8 Bayer ordered
+// dither instead of random noise. That looked right in isolation, but this
+// endpoint almost always ends up choosing the JPEG encode over PNG for
+// image-heavy pages (confirmed: pages 1/37/38 of Savvas's test deck all
+// pick JPEG, since it's smaller than PNG for photo-heavy content) -- and
+// JPEG's own 8x8 DCT block quantization at quality 80 was discarding a
+// dither amplitude small enough to stay invisible, as pure high-frequency
+// noise the encoder treats as safe to throw away. Measured directly: a
+// Bayer-dithered render and an undithered one produced byte-identical
+// banding after JPEG encoding. Raising the Bayer amplitude enough to
+// survive that quantization made the dither pattern itself clearly visible
+// as a crosshatch (it aliases with the JPEG block grid). Random per-pixel
+// noise doesn't have that periodic structure to alias against, survives
+// JPEG re-quantization at a much smaller amplitude, and reads as ordinary
+// grain rather than a pattern -- verified against the actual JPEG output
+// (not just a lossless PNG, which is what the Bayer version was checked
+// against and why this regression wasn't caught the first time): eliminates
+// the measured banding, keeps text edges and photos visually unaffected,
+// costs ~130ms/page and a moderate file-size increase. Pixmap.getPixels()
+// returns a live view into mupdf's own pixel buffer (confirmed empirically
+// -- mutating it changes what asPNG()/asJPEG() subsequently encode), so no
+// copy/re-set step is needed. See build-status.md, 2026-09-21, for the full
+// investigation (both the original root-cause and this follow-up).
 function applyDitherToPixmap(
   pixmap: mupdf.Pixmap,
-  ditherAmplitude: number = 2,
+  ditherAmplitude: number = 4,
 ): void {
   const pixels = pixmap.getPixels();
   const width = pixmap.getWidth();
@@ -161,12 +178,12 @@ function applyDitherToPixmap(
   const numComponents = pixmap.getNumberOfComponents();
   const hasAlpha = pixmap.getAlpha() !== 0;
   const colorComponents = hasAlpha ? numComponents - 1 : numComponents;
+  const rand = mulberry32(0x9e3779b9);
 
   for (let y = 0; y < height; y++) {
     const rowStart = y * stride;
-    const bayerRow = BAYER_8X8[y & 7];
     for (let x = 0; x < width; x++) {
-      const noise = (bayerRow[x & 7] / 63 - 0.5) * 2 * ditherAmplitude;
+      const noise = (rand() - 0.5) * 2 * ditherAmplitude;
       const pixelStart = rowStart + x * numComponents;
       for (let c = 0; c < colorComponents; c++) {
         const idx = pixelStart + c;
