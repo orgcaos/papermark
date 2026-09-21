@@ -256,16 +256,19 @@ export default function DomainSection({
                 ))}
               </>
             )}
-            <SelectItem
-              className="hover:bg-muted hover:dark:bg-gray-700"
-              value={
-                linkType === "DOCUMENT_LINK"
-                  ? "add_domain"
-                  : "add_dataroom_domain"
-              }
-            >
-              Add a custom domain ✨
-            </SelectItem>
+            {/* "Add a custom domain" removed 2026-09-21: this deployment
+            isn't hosted on Vercel, and both adding a domain and verifying
+            it (see pages/api/teams/[teamId]/domains/index.ts and
+            .../[domain]/verify.ts) go straight to Vercel's Domains API,
+            authenticated against a Vercel project this app doesn't
+            actually run on. The old flow would silently "succeed" --
+            save a row, return 201 -- while never provisioning anything
+            that could actually serve traffic, then sit at "Pending
+            Verification" forever. view.orgcaos.com is this deployment's
+            only real domain, wired up manually (DNS A record + Caddy)
+            outside this feature entirely. Left the underlying
+            components/API routes in place (hide, don't delete) in case
+            self-hosted custom-domain support is ever built properly. */}
           </SelectContent>
         </Select>
 
