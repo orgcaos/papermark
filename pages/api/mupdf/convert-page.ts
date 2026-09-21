@@ -1,15 +1,14 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
-import { execFile } from "child_process";
-import * as fs from "fs/promises";
-import * as os from "os";
-import * as path from "path";
-import { promisify } from "util";
-
 import { DocumentPage } from "@prisma/client";
 import { get } from "@vercel/edge-config";
 import { waitUntil } from "@vercel/functions";
+import { execFile } from "child_process";
+import * as fs from "fs/promises";
 import * as mupdf from "mupdf";
+import * as os from "os";
+import * as path from "path";
+import { promisify } from "util";
 
 import { getCachedPdfPath } from "@/lib/documents/pdf-cache";
 import { putFileServer } from "@/lib/files/put-file-server";
@@ -23,12 +22,175 @@ export const config = {
   maxDuration: 180,
 };
 
+// --- PRIMARY renderer: Ghostscript at 16 bit/channel + dither (2026-09-21) ---
+//
+// Why a third renderer, after poppler had just replaced mupdf the same day:
+// poppler fixed page 1 of the services book (where mupdf's 8-bit soft-mask
+// compositing rounded a same-colour-over-itself fade into ±1-level steps)
+// but NOT pages 37-39. Those pages carry a genuine, very subtle gradient
+// (#2E4F66 fading into #224B66: ~12 levels of red, ~4 of green across
+// ~500 px). Any renderer that outputs 8-bit colour without dithering has to
+// draw that as wide plateaus with 1-level steps, and because R and G step
+// on different rows the plateaus shift hue -- the "thick discoloured
+// lines". poppler, mupdf and Ghostscript-at-8-bit all do this; Acrobat and
+// Preview hide it by dithering. Dithering an 8-bit render after the fact
+// does nothing (the sub-level information is already gone), so the only
+// real fix is to render with more than 8 bits and dither on the way down.
+// Ghostscript's tiff48nc device is the cheapest 16-bit rasterizer we can
+// shell out to (uncompressed TIFF: ~1.0s/page here vs ~1.5s for pdftoppm's
+// PPM; png48 is slower because of the PNG encode). sharp reads it as
+// ushort, ditherTo8Bit() below adds ±1 LSB triangular noise to pixels that
+// sit on a gentle slope only, and sharp encodes the 8-bit result.
+//
+// Verified on the services book: page 1 flat, page 37 smooth under a ×10
+// contrast stretch. Text/photo pages look the same as poppler's output.
+//
+// Falls through to poppler, then mupdf, if `gs` is missing or errors.
+// Set PDF_RENDERER=poppler to skip Ghostscript entirely.
+
+function mulberry32(seed: number): () => number {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 16-bit RGB samples -> 8-bit. A sample is dithered (±1 LSB, triangular
+// distribution: rand() - rand()) only when it sits on a gentle slope, i.e.
+// it differs from the sample DITHER_LOOKBACK rows above or columns to the
+// left by a non-zero amount smaller than two 8-bit levels. Flat fills and
+// hard edges are rounded plainly. This keeps solid areas noise-free so PNG
+// output for simple pages stays as small as before (dithering every pixel
+// tripled PNG size on a text page), while gradients get the noise that
+// hides their 8-bit steps. The look-back distance is larger than 1 because
+// Ghostscript evaluates shadings in small plateaus (~4 px at 2x), and a
+// 1-px look-back would leave every other plateau row undithered.
+const DITHER_LOOKBACK_PX = 8;
+const DITHER_SLOPE_LIMIT = 257 * 2; // two 8-bit levels, in 16-bit units
+
+function ditherTo8Bit(u16: Uint16Array, width: number, seed: number): Buffer {
+  const out = Buffer.allocUnsafe(u16.length);
+  const rand = mulberry32(seed);
+  const stride = width * 3;
+  const back = DITHER_LOOKBACK_PX * stride;
+  const left = DITHER_LOOKBACK_PX * 3;
+  const T = DITHER_SLOPE_LIMIT;
+
+  for (let i = 0; i < u16.length; i++) {
+    const v = u16[i];
+    let slope = false;
+    if (i >= back) {
+      const d = v - u16[i - back];
+      slope = d !== 0 && d > -T && d < T;
+    }
+    if (!slope) {
+      const x = ((i / 3) | 0) % width;
+      if (x >= DITHER_LOOKBACK_PX) {
+        const d = v - u16[i - left];
+        slope = d !== 0 && d > -T && d < T;
+      }
+    }
+    let q = v / 257;
+    if (slope) q += rand() - rand();
+    out[i] = q <= 0 ? 0 : q >= 255 ? 255 : (q + 0.5) | 0;
+  }
+  return out;
+}
+
+async function renderPageWithGhostscript(
+  pdfPath: string,
+  pageNumber: number,
+  targetWidthPx: number,
+  targetHeightPx: number,
+  widthInPoints: number,
+  heightInPoints: number,
+): Promise<{ pngBuffer: Buffer; jpegBuffer: Buffer }> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-gs-"));
+  const outFile = path.join(tmpDir, "page.tif");
+
+  try {
+    // Separate X/Y DPI so the raster lands on the exact target size; gs
+    // may still round by a pixel, which the resize below corrects.
+    const dpiX = (targetWidthPx / widthInPoints) * 72;
+    const dpiY = (targetHeightPx / heightInPoints) * 72;
+
+    await execFileAsync(
+      "gs",
+      [
+        "-q",
+        "-dNOPAUSE",
+        "-dBATCH",
+        "-dSAFER",
+        "-dNOPROMPT",
+        "-sDEVICE=tiff48nc",
+        "-sCompression=none",
+        `-r${dpiX.toFixed(4)}x${dpiY.toFixed(4)}`,
+        `-dFirstPage=${pageNumber}`,
+        `-dLastPage=${pageNumber}`,
+        "-dTextAlphaBits=4",
+        "-dGraphicsAlphaBits=4",
+        `-sOutputFile=${outFile}`,
+        pdfPath,
+      ],
+      { maxBuffer: 16 * 1024 * 1024 },
+    );
+
+    const sharp = (await import("sharp")).default;
+
+    // toColourspace("rgb16") is required: without it sharp converts the
+    // input to 8-bit sRGB internally and raw({depth:"ushort"}) would just
+    // upcast 8-bit values, throwing away exactly the precision we need.
+    const { data, info } = await sharp(outFile, { limitInputPixels: false })
+      .toColourspace("rgb16")
+      .raw({ depth: "ushort" })
+      .toBuffer({ resolveWithObject: true });
+
+    // sharp's OutputInfo typings don't expose `depth`, so validate the
+    // buffer size instead: 3 channels x 2 bytes per sample.
+    if (info.channels !== 3 || data.length !== info.width * info.height * 6) {
+      throw new Error(
+        `ghostscript: unexpected raster ${info.width}x${info.height} ${info.channels}ch, ${data.length} bytes`,
+      );
+    }
+
+    const u16 = new Uint16Array(data.buffer, data.byteOffset, data.length / 2);
+    const pixels8 = ditherTo8Bit(u16, info.width, 0x9e3779b9 ^ pageNumber);
+
+    const raw = {
+      raw: { width: info.width, height: info.height, channels: 3 as const },
+    };
+    const exact =
+      info.width === targetWidthPx && info.height === targetHeightPx;
+    const fit = (s: import("sharp").Sharp) =>
+      exact ? s : s.resize(targetWidthPx, targetHeightPx, { fit: "fill" });
+
+    // JPEG at q85 with 4:4:4 chroma, not the q80 4:2:0 used elsewhere: the
+    // gradient banding is partly a hue shift, and chroma subsampling plus
+    // q80 quantization put visible structure back into the dithered ramp.
+    const [pngBuffer, jpegBuffer] = await Promise.all([
+      fit(sharp(pixels8, raw)).png({ adaptiveFiltering: true }).toBuffer(),
+      fit(sharp(pixels8, raw))
+        .jpeg({ quality: 85, chromaSubsampling: "4:4:4" })
+        .toBuffer(),
+    ]);
+    return { pngBuffer, jpegBuffer };
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// --- poppler renderer (fallback #1 as of the Ghostscript change above) ---
+//
 // Renders one page of a PDF with poppler's pdftoppm, producing both a PNG
 // and a JPEG so the caller can pick whichever is smaller (matches the
-// existing PNG-vs-JPEG choice this endpoint has always made). This is the
-// PRIMARY renderer as of 2026-09-21 -- see the long comment on
+// existing PNG-vs-JPEG choice this endpoint has always made). This was the
+// primary renderer for part of 2026-09-21 -- see the long comment on
 // renderPageWithPoppler below for why mupdf's own toPixmap() was replaced
-// here rather than patched around.
+// here rather than patched around, and the Ghostscript comment above for
+// why poppler in turn is now the fallback.
 //
 // -scale-to-x/-scale-to-y (rather than -r/DPI) is used so the output image
 // has *exactly* the pixel dimensions we ask for -- poppler's DPI-based
@@ -162,15 +324,11 @@ async function renderPageWithPoppler(
 // photo rendering quality were compared directly between the two renderers
 // on this test deck and are visually equivalent at the same output
 // resolution.
-function mulberry32(seed: number): () => number {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+//
+// (Ghostscript then replaced poppler as primary later the same day, because
+// poppler fixed the page-1 rounding bug but still bands genuine subtle
+// gradients on pages 37-39 -- see the top of this file. mulberry32() used
+// by applyDitherToPixmap below is defined up there now.)
 
 // Applies a subtle per-pixel random dither to every color channel of a
 // rendered pixmap, in place. Kept only as cheap insurance on the mupdf
@@ -257,7 +415,8 @@ async function renderPageWithMupdfFallback(
 
     const buffer =
       pngBuffer.byteLength < jpegBuffer.byteLength ? pngBuffer : jpegBuffer;
-    const format = pngBuffer.byteLength < jpegBuffer.byteLength ? "png" : "jpeg";
+    const format =
+      pngBuffer.byteLength < jpegBuffer.byteLength ? "png" : "jpeg";
 
     return { buffer, format, actualScaleFactor };
   } finally {
@@ -501,13 +660,40 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
 
     console.time("render");
     try {
-      const { pngBuffer, jpegBuffer } = await renderPageWithPoppler(
-        pdfPath,
-        pageNumber,
-        targetWidthPx,
-        targetHeightPx,
-      );
+      let rendered: { pngBuffer: Buffer; jpegBuffer: Buffer } | null = null;
 
+      // Ghostscript (16-bit + dither) first, unless disabled. See the
+      // comment at the top of this file.
+      if (process.env.PDF_RENDERER !== "poppler") {
+        try {
+          rendered = await renderPageWithGhostscript(
+            pdfPath,
+            pageNumber,
+            targetWidthPx,
+            targetHeightPx,
+            widthInPoints,
+            heightInPoints,
+          );
+          console.log("Renderer: ghostscript");
+        } catch (gsError) {
+          console.warn(
+            `[convert-page] ghostscript render failed for page ${pageNumber}, using poppler:`,
+            gsError,
+          );
+        }
+      }
+
+      if (!rendered) {
+        rendered = await renderPageWithPoppler(
+          pdfPath,
+          pageNumber,
+          targetWidthPx,
+          targetHeightPx,
+        );
+        console.log("Renderer: poppler");
+      }
+
+      const { pngBuffer, jpegBuffer } = rendered;
       if (pngBuffer.byteLength < jpegBuffer.byteLength) {
         chosenBuffer = pngBuffer;
         chosenFormat = "png";
