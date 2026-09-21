@@ -94,8 +94,19 @@ export default function InlineTagSelector({
       body: JSON.stringify({ name: tag }),
     });
     if (!res.ok) {
-      const { error } = await res.json();
-      toast.error(error);
+      // Defensively parse: a non-JSON error body (a proxy's HTML error
+      // page, an empty response) would otherwise throw here and propagate
+      // uncaught, which used to leave the "Create ..." row's spinner stuck
+      // on forever (see multi-select-v2.tsx's onSelect for the actual fix
+      // to that symptom) instead of showing an error and re-enabling input.
+      let message = "Failed to create tag";
+      try {
+        const body = await res.json();
+        message = body?.error ?? message;
+      } catch (error) {
+        // no-op: fall back to the generic message above
+      }
+      toast.error(message);
       return false;
     }
 

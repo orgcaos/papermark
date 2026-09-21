@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { type VariantProps, cva } from "class-variance-authority";
 import { CheckIcon, PlusIcon, TagIcon, WandSparkles } from "lucide-react";
+import { toast } from "sonner";
 
 import { TagColorProps } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -355,12 +356,26 @@ export const MultiSelect = React.forwardRef<
                       )}
                       onSelect={async () => {
                         setIsCreating(true);
-                        const success = await onCreate?.(search);
-                        if (success) {
-                          setSearch("");
-                          setIsPopoverOpen(false);
+                        try {
+                          const success = await onCreate?.(search);
+                          if (success) {
+                            setSearch("");
+                            setIsPopoverOpen(false);
+                          }
+                        } catch (error) {
+                          // onCreate (e.g. the tags API call) failing with a
+                          // thrown error -- rather than a handled `false`
+                          // return -- used to leave isCreating stuck `true`
+                          // forever: this CommandItem has no other loading
+                          // exit, so the "Create ..." row just spun in place
+                          // indefinitely with no way to retry. Always reset
+                          // via finally below, and surface something instead
+                          // of failing silently.
+                          console.error("Failed to create option", error);
+                          toast.error("Something went wrong. Please try again.");
+                        } finally {
+                          setIsCreating(false);
                         }
-                        setIsCreating(false);
                       }}
                     >
                       {isCreating ? (

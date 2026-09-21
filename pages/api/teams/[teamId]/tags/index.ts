@@ -112,7 +112,13 @@ export default async function handle(
       return res.status(403).end("Unauthorized to access this team");
     }
   } catch (error) {
-    errorhandler(error, res);
+    // Missing `return` here used to let execution fall through into the
+    // GET/POST branches below even after errorhandler() had already sent a
+    // response -- a second res.status()/json() call on the same request,
+    // which throws "ERR_HTTP_HEADERS_ALREADY_SENT" server-side and can
+    // surface to the client as a malformed/empty response instead of the
+    // clean 500 errorhandler() actually sent.
+    return errorhandler(error, res);
   }
   if (req.method === "GET") {
     // GET /api/teams/:teamId/tag
