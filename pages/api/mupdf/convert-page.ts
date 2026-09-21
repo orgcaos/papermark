@@ -22,109 +22,125 @@ export const config = {
   maxDuration: 180,
 };
 
-// mupdf warning strings that indicate the source PDF has a malformed/corrupted
-// image stream (most commonly from aggressive PDF compression tools like
-// Acrobat's PDF Optimizer producing a non-conformant stream length). mupdf's
-// decoder is strict about these and aborts partway through, leaving garbage
-// pixel data in the render. Other renderers (Preview, Acrobat, poppler) are
-// more tolerant and decode the same stream cleanly, so when we see one of
-// these warnings we re-render the page with poppler instead of trusting
-// mupdf's output. See build-status.md, 2026-09-21, for the investigation.
-const CORRUPTION_WARNING_PATTERNS = [
-  "premature end of data in flate filter",
-  "premature end of data in jbig2",
-  "premature end of data in jpx",
-  "error: format error",
-  "broken jpx",
-  "broken jbig2",
-];
-
-// Runs `fn` while capturing anything mupdf writes to stdout/stderr (mupdf's
-// native warnings are surfaced this way, not as thrown errors), and reports
-// whether any capture line matched a known corruption warning.
-async function runWithMupdfWarningCapture<T>(
-  fn: () => T,
-): Promise<{ result: T; hasCorruptionWarning: boolean; warnings: string[] }> {
-  const warnings: string[] = [];
-  const origStdoutWrite = process.stdout.write.bind(process.stdout);
-  const origStderrWrite = process.stderr.write.bind(process.stderr);
-
-  const capture = (chunk: unknown) => {
-    warnings.push(String(chunk));
-  };
-
-  process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
-    capture(chunk);
-    return (origStdoutWrite as any)(chunk, ...args);
-  }) as typeof process.stdout.write;
-  process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
-    capture(chunk);
-    return (origStderrWrite as any)(chunk, ...args);
-  }) as typeof process.stderr.write;
-
-  try {
-    const result = fn();
-    const hasCorruptionWarning = warnings.some((w) =>
-      CORRUPTION_WARNING_PATTERNS.some((pattern) => w.includes(pattern)),
-    );
-    return { result, hasCorruptionWarning, warnings };
-  } finally {
-    process.stdout.write = origStdoutWrite;
-    process.stderr.write = origStderrWrite;
-  }
-}
-
-// Fallback renderer for pages where mupdf reports a corrupted image stream.
-// Shells out to poppler's pdftoppm (a different, more tolerant PDF decoder)
-// to rasterize just this one page, at roughly the same DPI mupdf would have
-// used (72pt/inch * scaleFactor). Requires poppler-utils installed on the
-// server (`apt install poppler-utils`).
+// Renders one page of a PDF with poppler's pdftoppm, producing both a PNG
+// and a JPEG so the caller can pick whichever is smaller (matches the
+// existing PNG-vs-JPEG choice this endpoint has always made). This is the
+// PRIMARY renderer as of 2026-09-21 -- see the long comment on
+// renderPageWithPoppler below for why mupdf's own toPixmap() was replaced
+// here rather than patched around.
+//
+// -scale-to-x/-scale-to-y (rather than -r/DPI) is used so the output image
+// has *exactly* the pixel dimensions we ask for -- poppler's DPI-based
+// scaling can be off by a pixel or two from naive width*scaleFactor math,
+// and we want `metadata.width`/`metadata.height` to always match the
+// actual rendered image.
 async function renderPageWithPoppler(
   pdfData: ArrayBuffer,
   pageNumber: number,
-  scaleFactor: number,
-): Promise<Buffer> {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-fallback-"));
+  targetWidthPx: number,
+  targetHeightPx: number,
+): Promise<{ pngBuffer: Buffer; jpegBuffer: Buffer }> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-render-"));
   const pdfPath = path.join(tmpDir, "input.pdf");
-  const outputPrefix = path.join(tmpDir, "page");
-  const dpi = Math.round(72 * scaleFactor);
+  const pngPrefix = path.join(tmpDir, "page-png");
+  const jpegPrefix = path.join(tmpDir, "page-jpeg");
 
   try {
     await fs.writeFile(pdfPath, Buffer.from(pdfData));
+
+    const scaleArgs = [
+      "-scale-to-x",
+      String(targetWidthPx),
+      "-scale-to-y",
+      String(targetHeightPx),
+    ];
+
+    const readOutput = async (
+      prefix: string,
+      extRegex: RegExp,
+    ): Promise<Buffer> => {
+      const dir = path.dirname(prefix);
+      const base = path.basename(prefix);
+      const files = await fs.readdir(dir);
+      const outputFile = files.find(
+        (f) => f.startsWith(base) && extRegex.test(f),
+      );
+      if (!outputFile) {
+        throw new Error(
+          `poppler: no output file produced for prefix ${base} (is poppler-utils installed?)`,
+        );
+      }
+      return await fs.readFile(path.join(dir, outputFile));
+    };
 
     await execFileAsync("pdftoppm", [
       "-f",
       String(pageNumber),
       "-l",
       String(pageNumber),
-      "-r",
-      String(dpi),
+      ...scaleArgs,
+      "-png",
+      pdfPath,
+      pngPrefix,
+    ]);
+    const pngBuffer = await readOutput(pngPrefix, /\.png$/);
+
+    await execFileAsync("pdftoppm", [
+      "-f",
+      String(pageNumber),
+      "-l",
+      String(pageNumber),
+      ...scaleArgs,
       "-jpeg",
       "-jpegopt",
       "quality=80",
       pdfPath,
-      outputPrefix,
+      jpegPrefix,
     ]);
+    const jpegBuffer = await readOutput(jpegPrefix, /\.jpe?g$/);
 
-    const files = await fs.readdir(tmpDir);
-    const outputFile = files.find(
-      (f) => f.startsWith("page") && /\.jpe?g$/.test(f),
-    );
-    if (!outputFile) {
-      throw new Error(
-        "poppler fallback: no output file produced (is poppler-utils installed?)",
-      );
-    }
-
-    return await fs.readFile(path.join(tmpDir, outputFile));
+    return { pngBuffer, jpegBuffer };
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
 }
 
-// Deterministic per-pixel PRNG (mulberry32) used for dithering below. Not
-// cryptographic -- just needs to be fast and to not repeat in a visible
-// pattern over a page-sized image.
+// --- mupdf-render fallback (only used if poppler itself is unavailable or errors) ---
+//
+// mupdf is still used above for page count/dimensions/links/orientation --
+// none of that goes through its rasterizer, so none of it is affected by
+// what's below. This section is only a safety net for the rare case where
+// pdftoppm fails outright (not installed, crashes on a specific malformed
+// PDF, etc.); if that happens we fall back to mupdf's own toPixmap() render
+// rather than failing the page.
+//
+// Why poppler became the primary renderer instead of mupdf (2026-09-21):
+// Savvas reported visible horizontal banding on specific pages of a design
+// deck (pages 1/37/38). The first two fixes here treated it as an 8-bit
+// color-precision limit on a long gradient and tried to paper over it with
+// post-render dithering (first an 8x8 Bayer pattern, then per-pixel random
+// noise once the Bayer version turned out to be silently erased by JPEG
+// compression -- see the git history of this file and build-status.md,
+// 2026-09-21, for both write-ups). That diagnosis was wrong. Inspecting the
+// PDF's content stream directly (via pikepdf) showed the affected pages
+// don't contain a literal smooth gradient at all -- they draw a solid
+// color through an ExtGState with /BM /Color blend mode and a /Luminosity
+// soft mask whose alpha value is itself driven by an axial (linear)
+// shading pattern. mupdf composites that soft mask in 8-bit integer math,
+// which rounds unevenly across the ramp and produces real stepping: a
+// direct column-by-column pixel comparison on page 1 found exactly 93
+// stepped rows in mupdf's lossless render at column x=3400, vs 0 stepped
+// rows in poppler's render of the same page at the same resolution --
+// poppler composites the same soft mask without the rounding artifact.
+// Dithering was never going to fix this properly: it just adds noise on
+// top of a compositing bug, rather than removing the bug. Switching the
+// actual rasterization to poppler (already a required dependency as of the
+// corrupted-stream fix, commit a2356e64) fixes it at the source, for this
+// bug and for the unrelated corrupted-image-stream bug a2356e64 targeted --
+// poppler was already shown to handle that case cleanly too. Text and
+// photo rendering quality were compared directly between the two renderers
+// on this test deck and are visually equivalent at the same output
+// resolution.
 function mulberry32(seed: number): () => number {
   return function () {
     seed |= 0;
@@ -136,37 +152,12 @@ function mulberry32(seed: number): () => number {
 }
 
 // Applies a subtle per-pixel random dither to every color channel of a
-// rendered pixmap, in place. Very gentle/long color gradients (common in
-// flattened background illustrations exported from design tools) can't be
-// represented smoothly in 8-bit color and render with visible stepped
-// banding -- confirmed this is true across different PDF renderers (mupdf
-// and poppler both show identical banding on the same source gradient), so
-// it isn't a corruption/decoder issue like the one above, just an 8-bit
-// precision limit.
-//
-// An earlier version of this function used a classic 8x8 Bayer ordered
-// dither instead of random noise. That looked right in isolation, but this
-// endpoint almost always ends up choosing the JPEG encode over PNG for
-// image-heavy pages (confirmed: pages 1/37/38 of Savvas's test deck all
-// pick JPEG, since it's smaller than PNG for photo-heavy content) -- and
-// JPEG's own 8x8 DCT block quantization at quality 80 was discarding a
-// dither amplitude small enough to stay invisible, as pure high-frequency
-// noise the encoder treats as safe to throw away. Measured directly: a
-// Bayer-dithered render and an undithered one produced byte-identical
-// banding after JPEG encoding. Raising the Bayer amplitude enough to
-// survive that quantization made the dither pattern itself clearly visible
-// as a crosshatch (it aliases with the JPEG block grid). Random per-pixel
-// noise doesn't have that periodic structure to alias against, survives
-// JPEG re-quantization at a much smaller amplitude, and reads as ordinary
-// grain rather than a pattern -- verified against the actual JPEG output
-// (not just a lossless PNG, which is what the Bayer version was checked
-// against and why this regression wasn't caught the first time): eliminates
-// the measured banding, keeps text edges and photos visually unaffected,
-// costs ~130ms/page and a moderate file-size increase. Pixmap.getPixels()
-// returns a live view into mupdf's own pixel buffer (confirmed empirically
-// -- mutating it changes what asPNG()/asJPEG() subsequently encode), so no
-// copy/re-set step is needed. See build-status.md, 2026-09-21, for the full
-// investigation (both the original root-cause and this follow-up).
+// rendered pixmap, in place. Kept only as cheap insurance on the mupdf
+// fallback path below -- it doesn't fix the soft-mask compositing bug
+// described above (nothing short of a different renderer does), but it
+// does soften plain 8-bit gradient banding a little if that fallback path
+// is ever hit on an affected page. Pixmap.getPixels() returns a live view
+// into mupdf's own pixel buffer, so no copy/re-set step is needed.
 function applyDitherToPixmap(
   pixmap: mupdf.Pixmap,
   ditherAmplitude: number = 4,
@@ -191,6 +182,65 @@ function applyDitherToPixmap(
         pixels[idx] = value < 0 ? 0 : value > 255 ? 255 : value;
       }
     }
+  }
+}
+
+// Renders via mupdf's own toPixmap(), retrying once at a reduced scale
+// factor if the first attempt throws (this mirrors the retry mupdf's
+// primary render used to do when it was the main renderer -- kept here
+// since large/complex pages can still fail the same way in this fallback
+// path). Returns the chosen PNG/JPEG buffer plus the actual scale factor
+// used, so the caller can correct `metadata` if a retry happened.
+async function renderPageWithMupdfFallback(
+  page: mupdf.PDFPage,
+  scaleFactor: number,
+): Promise<{
+  buffer: Buffer | Uint8Array;
+  format: string;
+  actualScaleFactor: number;
+}> {
+  let scaledPixmap: mupdf.Pixmap;
+  let actualScaleFactor = scaleFactor;
+
+  try {
+    const doc_to_screen = mupdf.Matrix.scale(scaleFactor, scaleFactor);
+    scaledPixmap = page.toPixmap(
+      doc_to_screen,
+      mupdf.ColorSpace.DeviceRGB,
+      false,
+      true,
+    );
+  } catch (error) {
+    console.error(
+      "mupdf fallback: pixmap creation failed, retrying with reduced scale factor:",
+      error,
+    );
+    actualScaleFactor = Math.max(1, scaleFactor * 0.5);
+    const reduced_doc_to_screen = mupdf.Matrix.scale(
+      actualScaleFactor,
+      actualScaleFactor,
+    );
+    scaledPixmap = page.toPixmap(
+      reduced_doc_to_screen,
+      mupdf.ColorSpace.DeviceRGB,
+      false,
+      true,
+    );
+  }
+
+  try {
+    applyDitherToPixmap(scaledPixmap);
+
+    const pngBuffer = scaledPixmap.asPNG();
+    const jpegBuffer = scaledPixmap.asJPEG(80, false);
+
+    const buffer =
+      pngBuffer.byteLength < jpegBuffer.byteLength ? pngBuffer : jpegBuffer;
+    const format = pngBuffer.byteLength < jpegBuffer.byteLength ? "png" : "jpeg";
+
+    return { buffer, format, actualScaleFactor };
+  } finally {
+    scaledPixmap.destroy();
   }
 }
 
@@ -236,7 +286,9 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
 
     // Convert the response to a buffer
     const pdfData = await response.arrayBuffer();
-    // Create a MuPDF instance
+    // Create a MuPDF instance -- used for page metadata (dimensions,
+    // orientation, links) only. Rasterization is done by poppler below;
+    // see the fallback section's comment for why.
     var doc = new mupdf.PDFDocument(pdfData);
     console.log("Original document size:", pdfData.byteLength);
 
@@ -313,7 +365,6 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
     };
 
     const scaleFactor = getOptimalScaleFactor(widthInPoints, heightInPoints);
-    const doc_to_screen = mupdf.Matrix.scale(scaleFactor, scaleFactor);
 
     console.log("Scale factor:", scaleFactor);
     console.log(
@@ -388,150 +439,79 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
       }
     }
 
-    // Will be updated if we use a reduced scale factor
+    // Will be updated if we fall back to mupdf with a reduced scale factor
     let actualScaleFactor = scaleFactor;
+
+    // Target pixel dimensions we ask poppler to render at exactly (see
+    // renderPageWithPoppler's comment on -scale-to-x/-scale-to-y).
+    const targetWidthPx = Math.max(1, Math.round(widthInPoints * scaleFactor));
+    const targetHeightPx = Math.max(
+      1,
+      Math.round(heightInPoints * scaleFactor),
+    );
 
     const metadata = {
       originalWidth: widthInPoints,
       originalHeight: heightInPoints,
-      width: widthInPoints * actualScaleFactor,
-      height: heightInPoints * actualScaleFactor,
+      width: targetWidthPx,
+      height: targetHeightPx,
       scaleFactor: actualScaleFactor,
     };
 
-    // Estimate memory usage before creating pixmap
-    const finalWidth = Math.floor(widthInPoints * scaleFactor);
-    const finalHeight = Math.floor(heightInPoints * scaleFactor);
-    const estimatedMemoryMB = (finalWidth * finalHeight * 3) / (1024 * 1024); // RGB = 3 bytes per pixel
+    // Estimate memory usage before rendering (rough, both renderers are in
+    // the same ballpark for uncompressed RGB).
+    const estimatedMemoryMB =
+      (targetWidthPx * targetHeightPx * 3) / (1024 * 1024);
 
     console.log(
-      `Estimated memory usage: ${estimatedMemoryMB.toFixed(1)}MB for ${finalWidth} × ${finalHeight} pixels`,
+      `Estimated memory usage: ${estimatedMemoryMB.toFixed(1)}MB for ${targetWidthPx} × ${targetHeightPx} pixels`,
     );
 
-    // Warn if memory usage is high
     if (estimatedMemoryMB > 200) {
       console.warn(
         `High memory usage expected: ${estimatedMemoryMB.toFixed(1)}MB. Consider reducing document size.`,
       );
     }
 
-    console.time("toPixmap");
-    let scaledPixmap;
-    let mupdfHadCorruptionWarning = false;
-    try {
-      const capture = await runWithMupdfWarningCapture(() =>
-        page.toPixmap(doc_to_screen, mupdf.ColorSpace.DeviceRGB, false, true),
-      );
-      scaledPixmap = capture.result;
-      mupdfHadCorruptionWarning = capture.hasCorruptionWarning;
-      if (mupdfHadCorruptionWarning) {
-        console.warn(
-          `mupdf reported a corrupted image stream on page ${pageNumber}, will fall back to poppler:`,
-          capture.warnings.filter((w) =>
-            CORRUPTION_WARNING_PATTERNS.some((p) => w.includes(p)),
-          ),
-        );
-      }
-    } catch (error) {
-      // If pixmap creation fails, try with a smaller scale factor
-      console.error(
-        "Pixmap creation failed, attempting with reduced scale factor:",
-        error,
-      );
-      const reducedScaleFactor = Math.max(1, scaleFactor * 0.5);
-      console.log(`Retrying with reduced scale factor: ${reducedScaleFactor}`);
-
-      const reduced_doc_to_screen = mupdf.Matrix.scale(
-        reducedScaleFactor,
-        reducedScaleFactor,
-      );
-      const capture = await runWithMupdfWarningCapture(() =>
-        page.toPixmap(
-          reduced_doc_to_screen,
-          mupdf.ColorSpace.DeviceRGB,
-          false,
-          true,
-        ),
-      );
-      scaledPixmap = capture.result;
-      mupdfHadCorruptionWarning = capture.hasCorruptionWarning;
-
-      // Update metadata with actual scale factor used
-      actualScaleFactor = reducedScaleFactor;
-      metadata.width = widthInPoints * actualScaleFactor;
-      metadata.height = heightInPoints * actualScaleFactor;
-      metadata.scaleFactor = actualScaleFactor;
-      console.log(
-        "Successfully created pixmap with reduced scale factor:",
-        actualScaleFactor,
-      );
-    }
-    console.timeEnd("toPixmap");
-
-    console.time("dither");
-    applyDitherToPixmap(scaledPixmap);
-    console.timeEnd("dither");
-
     let chosenBuffer: Buffer | Uint8Array;
     let chosenFormat: string;
 
-    if (mupdfHadCorruptionWarning) {
-      // mupdf's decoder choked on an image stream on this page. Re-render
-      // the page with poppler (pdftoppm), which is more tolerant of the
-      // kind of malformed streams that non-conformant PDF exporters (e.g.
-      // Acrobat's PDF Optimizer) sometimes produce.
-      console.time("popplerFallback");
-      try {
-        chosenBuffer = await renderPageWithPoppler(
-          pdfData,
-          pageNumber,
-          actualScaleFactor,
-        );
-        chosenFormat = "jpeg";
-        console.log(
-          `Used poppler fallback for page ${pageNumber} due to mupdf stream warning`,
-        );
-      } catch (fallbackError) {
-        // If the fallback itself fails (e.g. poppler-utils not installed),
-        // log it clearly and fall back to mupdf's own (possibly glitched)
-        // output rather than failing the whole page.
-        log({
-          message: `Poppler fallback failed for page ${pageNumber}, using mupdf output despite corruption warning: \n\n Error: ${fallbackError} \n\n \`Metadata: {teamId: ${teamId}, documentVersionId: ${documentVersionId}, pageNumber: ${pageNumber}}\``,
-          type: "error",
-          mention: true,
-        });
-        const pngBuffer = scaledPixmap.asPNG();
-        const jpegBuffer = scaledPixmap.asJPEG(80, false);
-        if (pngBuffer.byteLength < jpegBuffer.byteLength) {
-          chosenBuffer = pngBuffer;
-          chosenFormat = "png";
-        } else {
-          chosenBuffer = jpegBuffer;
-          chosenFormat = "jpeg";
-        }
-      }
-      console.timeEnd("popplerFallback");
-    } else {
-      console.time("compare");
-      console.time("asPNG");
-      const pngBuffer = scaledPixmap.asPNG(); // as PNG
-      console.timeEnd("asPNG");
-      console.time("asJPEG");
-      const jpegBuffer = scaledPixmap.asJPEG(80, false); // as JPEG
-      console.timeEnd("asJPEG");
+    console.time("render");
+    try {
+      const { pngBuffer, jpegBuffer } = await renderPageWithPoppler(
+        pdfData,
+        pageNumber,
+        targetWidthPx,
+        targetHeightPx,
+      );
 
-      const pngSize = pngBuffer.byteLength;
-      const jpegSize = jpegBuffer.byteLength;
-
-      if (pngSize < jpegSize) {
+      if (pngBuffer.byteLength < jpegBuffer.byteLength) {
         chosenBuffer = pngBuffer;
         chosenFormat = "png";
       } else {
         chosenBuffer = jpegBuffer;
         chosenFormat = "jpeg";
       }
-      console.timeEnd("compare");
+    } catch (popplerError) {
+      // poppler itself failed (not installed, crashed on this specific
+      // file, etc.) -- fall back to mupdf's own renderer rather than
+      // failing the whole page. See the fallback section's comment above
+      // for why poppler is preferred when available.
+      log({
+        message: `Poppler render failed for page ${pageNumber}, falling back to mupdf: \n\n Error: ${popplerError} \n\n \`Metadata: {teamId: ${teamId}, documentVersionId: ${documentVersionId}, pageNumber: ${pageNumber}}\``,
+        type: "error",
+        mention: true,
+      });
+
+      const fallback = await renderPageWithMupdfFallback(page, scaleFactor);
+      chosenBuffer = fallback.buffer;
+      chosenFormat = fallback.format;
+      actualScaleFactor = fallback.actualScaleFactor;
+      metadata.scaleFactor = actualScaleFactor;
+      metadata.width = Math.floor(widthInPoints * actualScaleFactor);
+      metadata.height = Math.floor(heightInPoints * actualScaleFactor);
     }
+    console.timeEnd("render");
 
     console.log("Chosen format:", chosenFormat);
 
@@ -553,7 +533,6 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
 
     buffer = Buffer.alloc(0); // free memory
     chosenBuffer = Buffer.alloc(0); // free memory
-    scaledPixmap.destroy(); // free memory
     page.destroy(); // free memory
 
     if (!data || !type) {
