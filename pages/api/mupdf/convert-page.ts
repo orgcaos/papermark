@@ -122,6 +122,61 @@ async function renderPageWithPoppler(
   }
 }
 
+// Classic 8x8 Bayer ordered-dither threshold matrix (values 0-63). Tiled
+// across the image, it gives each pixel a small, deterministic offset that
+// breaks up hard color steps without adding visible grain or requiring a
+// per-pixel RNG call (fast: ~50ms for a 2000x1125 page).
+const BAYER_8X8 = [
+  [0, 32, 8, 40, 2, 34, 10, 42],
+  [48, 16, 56, 24, 50, 18, 58, 26],
+  [12, 44, 4, 36, 14, 46, 6, 38],
+  [60, 28, 52, 20, 62, 30, 54, 22],
+  [3, 35, 11, 43, 1, 33, 9, 41],
+  [51, 19, 59, 27, 49, 17, 57, 25],
+  [15, 47, 7, 39, 13, 45, 5, 37],
+  [63, 31, 55, 23, 61, 29, 53, 21],
+];
+
+// Applies a subtle Bayer dither to every color channel of a rendered
+// pixmap, in place. Very gentle/long color gradients (common in flattened
+// background illustrations exported from design tools) can't be
+// represented smoothly in 8-bit color and render with visible stepped
+// banding -- confirmed this is true across different PDF renderers
+// (mupdf and poppler both show identical banding on the same source
+// gradient), so it isn't a corruption/decoder issue like the one above,
+// just an 8-bit precision limit. A tiny amount of dither noise
+// decorrelates the quantization error that otherwise shows up as hard
+// color steps. Pixmap.getPixels() returns a live view into mupdf's own
+// pixel buffer (confirmed empirically -- mutating it changes what
+// asPNG()/asJPEG() subsequently encode), so no copy/re-set step is
+// needed. See build-status.md, 2026-09-21, for the investigation.
+function applyDitherToPixmap(
+  pixmap: mupdf.Pixmap,
+  ditherAmplitude: number = 2,
+): void {
+  const pixels = pixmap.getPixels();
+  const width = pixmap.getWidth();
+  const height = pixmap.getHeight();
+  const stride = pixmap.getStride();
+  const numComponents = pixmap.getNumberOfComponents();
+  const hasAlpha = pixmap.getAlpha() !== 0;
+  const colorComponents = hasAlpha ? numComponents - 1 : numComponents;
+
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * stride;
+    const bayerRow = BAYER_8X8[y & 7];
+    for (let x = 0; x < width; x++) {
+      const noise = (bayerRow[x & 7] / 63 - 0.5) * 2 * ditherAmplitude;
+      const pixelStart = rowStart + x * numComponents;
+      for (let c = 0; c < colorComponents; c++) {
+        const idx = pixelStart + c;
+        const value = pixels[idx] + noise;
+        pixels[idx] = value < 0 ? 0 : value > 255 ? 255 : value;
+      }
+    }
+  }
+}
+
 export default async (req: NextApiRequest, res: NextApiResponse) => {
   // check if post method
   if (req.method !== "POST") {
@@ -395,6 +450,10 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
       );
     }
     console.timeEnd("toPixmap");
+
+    console.time("dither");
+    applyDitherToPixmap(scaledPixmap);
+    console.timeEnd("dither");
 
     let chosenBuffer: Buffer | Uint8Array;
     let chosenFormat: string;
