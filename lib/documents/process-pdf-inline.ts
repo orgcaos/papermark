@@ -24,6 +24,7 @@
  */
 import { ONE_HOUR } from "@/lib/constants";
 import { isTrustedTeam } from "@/lib/edge-config/trusted-teams";
+import { clearCachedPdf } from "@/lib/documents/pdf-cache";
 import { getFile } from "@/lib/files/get-file";
 import prisma from "@/lib/prisma";
 
@@ -169,21 +170,44 @@ export async function processPdfInline(payload: ProcessPdfInlinePayload) {
 
     const trustedTeam = await isTrustedTeam(teamId);
 
-    let conversionWithoutError = true;
-    for (let i = 0; i < numPages; i++) {
-      const currentPage = i + 1;
-      const ok = await convertPageWithRetry({
+    // Page 1 goes first on its own (it sets the document's orientation and
+    // warms the on-disk PDF cache); the rest are converted a few at a time
+    // instead of strictly one after another. The server has 2 vCPUs and the
+    // heavy lifting happens outside the Node event loop (pdftoppm child
+    // process, sharp's thread pool), so 2 at a time roughly halves the time
+    // a document -- and every share link on it -- shows as "processing".
+    const concurrency = Math.max(
+      1,
+      Number(process.env.PDF_CONVERT_CONCURRENCY) || 2,
+    );
+    const convert = (pageNumber: number) =>
+      convertPageWithRetry({
         documentVersionId,
-        pageNumber: currentPage,
+        pageNumber,
         url: signedUrl,
         teamId,
         trustedTeam,
       });
-      if (!ok) {
-        conversionWithoutError = false;
-        break;
+
+    const startedAt = Date.now();
+    let conversionWithoutError = await convert(1);
+    let nextPage = 2;
+    const worker = async () => {
+      while (conversionWithoutError && nextPage <= numPages!) {
+        const pageNumber = nextPage++;
+        const ok = await convert(pageNumber);
+        if (!ok) conversionWithoutError = false;
       }
+    };
+    if (conversionWithoutError) {
+      await Promise.all(Array.from({ length: concurrency }, worker));
     }
+    await clearCachedPdf(documentVersionId);
+    console.log("[pdf-inline] page conversion finished", {
+      documentVersionId,
+      numPages,
+      seconds: Math.round((Date.now() - startedAt) / 1000),
+    });
 
     if (!conversionWithoutError) {
       console.error("[pdf-inline] conversion failed", { documentVersionId });

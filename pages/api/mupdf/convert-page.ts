@@ -11,6 +11,7 @@ import { get } from "@vercel/edge-config";
 import { waitUntil } from "@vercel/functions";
 import * as mupdf from "mupdf";
 
+import { getCachedPdfPath } from "@/lib/documents/pdf-cache";
 import { putFileServer } from "@/lib/files/put-file-server";
 import prisma from "@/lib/prisma";
 import { log } from "@/lib/utils";
@@ -35,70 +36,90 @@ export const config = {
 // and we want `metadata.width`/`metadata.height` to always match the
 // actual rendered image.
 async function renderPageWithPoppler(
-  pdfData: ArrayBuffer,
+  pdfPath: string,
   pageNumber: number,
   targetWidthPx: number,
   targetHeightPx: number,
 ): Promise<{ pngBuffer: Buffer; jpegBuffer: Buffer }> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-render-"));
-  const pdfPath = path.join(tmpDir, "input.pdf");
-  const pngPrefix = path.join(tmpDir, "page-png");
-  const jpegPrefix = path.join(tmpDir, "page-jpeg");
+
+  const pageArgs = [
+    "-f",
+    String(pageNumber),
+    "-l",
+    String(pageNumber),
+    "-scale-to-x",
+    String(targetWidthPx),
+    "-scale-to-y",
+    String(targetHeightPx),
+  ];
+
+  const runPdftoppm = async (
+    formatArgs: string[],
+    prefixName: string,
+    extRegex: RegExp,
+  ): Promise<Buffer> => {
+    await execFileAsync("pdftoppm", [
+      ...pageArgs,
+      ...formatArgs,
+      pdfPath,
+      path.join(tmpDir, prefixName),
+    ]);
+    const files = await fs.readdir(tmpDir);
+    const outputFile = files.find(
+      (f) => f.startsWith(prefixName) && extRegex.test(f),
+    );
+    if (!outputFile) {
+      throw new Error(
+        `poppler: no output file produced for prefix ${prefixName} (is poppler-utils installed?)`,
+      );
+    }
+    return await fs.readFile(path.join(tmpDir, outputFile));
+  };
 
   try {
-    await fs.writeFile(pdfPath, Buffer.from(pdfData));
-
-    const scaleArgs = [
-      "-scale-to-x",
-      String(targetWidthPx),
-      "-scale-to-y",
-      String(targetHeightPx),
-    ];
-
-    const readOutput = async (
-      prefix: string,
-      extRegex: RegExp,
-    ): Promise<Buffer> => {
-      const dir = path.dirname(prefix);
-      const base = path.basename(prefix);
-      const files = await fs.readdir(dir);
-      const outputFile = files.find(
-        (f) => f.startsWith(base) && extRegex.test(f),
+    // Fast path (2026-09-21, "links take ages to load"): rasterize the page
+    // ONCE to an uncompressed PPM, then encode PNG + JPEG from those pixels
+    // with sharp (libvips, off the main thread, both in parallel). The
+    // previous version ran pdftoppm twice -- a full parse + rasterize of the
+    // page for each format, plus pdftoppm's slow single-threaded PNG
+    // encoder -- which measured ~3.5x slower per page. Pixels are identical
+    // either way: same poppler rasterizer, same output dimensions.
+    try {
+      const ppm = await runPdftoppm([], "page-ppm", /\.ppm$/);
+      const header = /^P6\s+(\d+)\s+(\d+)\s+255\s/.exec(
+        ppm.subarray(0, 64).toString("latin1"),
       );
-      if (!outputFile) {
-        throw new Error(
-          `poppler: no output file produced for prefix ${base} (is poppler-utils installed?)`,
-        );
-      }
-      return await fs.readFile(path.join(dir, outputFile));
-    };
+      if (!header) throw new Error("unexpected PPM header");
+      const sharp = (await import("sharp")).default;
+      const raw = {
+        raw: {
+          width: Number(header[1]),
+          height: Number(header[2]),
+          channels: 3 as const,
+        },
+      };
+      const pixels = ppm.subarray(header[0].length);
+      const [pngBuffer, jpegBuffer] = await Promise.all([
+        sharp(pixels, raw).png({ adaptiveFiltering: true }).toBuffer(),
+        sharp(pixels, raw).jpeg({ quality: 80 }).toBuffer(),
+      ]);
+      return { pngBuffer, jpegBuffer };
+    } catch (fastPathError) {
+      // sharp missing/broken on this box, or an unexpected PPM -- fall back
+      // to letting pdftoppm do the encoding itself (slower, same result).
+      console.warn(
+        "[convert-page] fast PPM+sharp path failed, using pdftoppm encoders:",
+        fastPathError,
+      );
+    }
 
-    await execFileAsync("pdftoppm", [
-      "-f",
-      String(pageNumber),
-      "-l",
-      String(pageNumber),
-      ...scaleArgs,
-      "-png",
-      pdfPath,
-      pngPrefix,
-    ]);
-    const pngBuffer = await readOutput(pngPrefix, /\.png$/);
-
-    await execFileAsync("pdftoppm", [
-      "-f",
-      String(pageNumber),
-      "-l",
-      String(pageNumber),
-      ...scaleArgs,
-      "-jpeg",
-      "-jpegopt",
-      "quality=80",
-      pdfPath,
-      jpegPrefix,
-    ]);
-    const jpegBuffer = await readOutput(jpegPrefix, /\.jpe?g$/);
-
+    const pngBuffer = await runPdftoppm(["-png"], "page-png", /\.png$/);
+    const jpegBuffer = await runPdftoppm(
+      ["-jpeg", "-jpegopt", "quality=80"],
+      "page-jpeg",
+      /\.jpe?g$/,
+    );
     return { pngBuffer, jpegBuffer };
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
@@ -271,10 +292,14 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
     };
 
   try {
-    // Fetch the PDF data
-    let response: Response;
+    // Get the PDF -- downloaded once per document version and cached on
+    // disk, not re-fetched from object storage for every single page (see
+    // lib/documents/pdf-cache.ts).
+    let pdfPath: string;
+    let pdfData: Buffer;
     try {
-      response = await fetch(url);
+      pdfPath = await getCachedPdfPath(documentVersionId, url);
+      pdfData = await fs.readFile(pdfPath);
     } catch (error) {
       log({
         message: `Failed to fetch PDF in conversion process with error: \n\n Error: ${error} \n\n \`Metadata: {teamId: ${teamId}, documentVersionId: ${documentVersionId}, pageNumber: ${pageNumber}}\``,
@@ -284,8 +309,6 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
       throw new Error(`Failed to fetch pdf on document page ${pageNumber}`);
     }
 
-    // Convert the response to a buffer
-    const pdfData = await response.arrayBuffer();
     // Create a MuPDF instance -- used for page metadata (dimensions,
     // orientation, links) only. Rasterization is done by poppler below;
     // see the fallback section's comment for why.
@@ -479,7 +502,7 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
     console.time("render");
     try {
       const { pngBuffer, jpegBuffer } = await renderPageWithPoppler(
-        pdfData,
+        pdfPath,
         pageNumber,
         targetWidthPx,
         targetHeightPx,
