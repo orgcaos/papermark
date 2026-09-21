@@ -41,8 +41,18 @@ const CustomMetaTag = ({
         </>
       )}
 
-      {/* meta title */}
-      {enableBranding && title && (
+      {/* meta title -- shown regardless of the "custom branding" toggle.
+          The title here is already computed with a sensible fallback (the
+          document/dataroom name, e.g. "Q3 Proposal.pdf | Orgcaos Docket")
+          by the calling page, so a shared link's social preview shows what
+          was actually shared instead of falling through to the generic
+          site-wide title in pages/_app.tsx / app/layout.tsx. Only the
+          description and image stay behind enableBranding below, since
+          those need genuinely custom content (an uploaded image, custom
+          copy) rather than a name that's already known. See
+          build-status.md, 2026-09-21 ("social share preview shows generic
+          text"), for the report this fixes. */}
+      {title && (
         <>
           <title>{title}</title>
           <meta property="og:title" content={title} key="og-title" />
