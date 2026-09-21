@@ -1,5 +1,11 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
+import { execFile } from "child_process";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
+import { promisify } from "util";
+
 import { DocumentPage } from "@prisma/client";
 import { get } from "@vercel/edge-config";
 import { waitUntil } from "@vercel/functions";
@@ -9,10 +15,112 @@ import { putFileServer } from "@/lib/files/put-file-server";
 import prisma from "@/lib/prisma";
 import { log } from "@/lib/utils";
 
+const execFileAsync = promisify(execFile);
+
 // This function can run for a maximum of 120 seconds
 export const config = {
   maxDuration: 180,
 };
+
+// mupdf warning strings that indicate the source PDF has a malformed/corrupted
+// image stream (most commonly from aggressive PDF compression tools like
+// Acrobat's PDF Optimizer producing a non-conformant stream length). mupdf's
+// decoder is strict about these and aborts partway through, leaving garbage
+// pixel data in the render. Other renderers (Preview, Acrobat, poppler) are
+// more tolerant and decode the same stream cleanly, so when we see one of
+// these warnings we re-render the page with poppler instead of trusting
+// mupdf's output. See build-status.md, 2026-09-21, for the investigation.
+const CORRUPTION_WARNING_PATTERNS = [
+  "premature end of data in flate filter",
+  "premature end of data in jbig2",
+  "premature end of data in jpx",
+  "error: format error",
+  "broken jpx",
+  "broken jbig2",
+];
+
+// Runs `fn` while capturing anything mupdf writes to stdout/stderr (mupdf's
+// native warnings are surfaced this way, not as thrown errors), and reports
+// whether any capture line matched a known corruption warning.
+async function runWithMupdfWarningCapture<T>(
+  fn: () => T,
+): Promise<{ result: T; hasCorruptionWarning: boolean; warnings: string[] }> {
+  const warnings: string[] = [];
+  const origStdoutWrite = process.stdout.write.bind(process.stdout);
+  const origStderrWrite = process.stderr.write.bind(process.stderr);
+
+  const capture = (chunk: unknown) => {
+    warnings.push(String(chunk));
+  };
+
+  process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
+    capture(chunk);
+    return (origStdoutWrite as any)(chunk, ...args);
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+    capture(chunk);
+    return (origStderrWrite as any)(chunk, ...args);
+  }) as typeof process.stderr.write;
+
+  try {
+    const result = fn();
+    const hasCorruptionWarning = warnings.some((w) =>
+      CORRUPTION_WARNING_PATTERNS.some((pattern) => w.includes(pattern)),
+    );
+    return { result, hasCorruptionWarning, warnings };
+  } finally {
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
+  }
+}
+
+// Fallback renderer for pages where mupdf reports a corrupted image stream.
+// Shells out to poppler's pdftoppm (a different, more tolerant PDF decoder)
+// to rasterize just this one page, at roughly the same DPI mupdf would have
+// used (72pt/inch * scaleFactor). Requires poppler-utils installed on the
+// server (`apt install poppler-utils`).
+async function renderPageWithPoppler(
+  pdfData: ArrayBuffer,
+  pageNumber: number,
+  scaleFactor: number,
+): Promise<Buffer> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-fallback-"));
+  const pdfPath = path.join(tmpDir, "input.pdf");
+  const outputPrefix = path.join(tmpDir, "page");
+  const dpi = Math.round(72 * scaleFactor);
+
+  try {
+    await fs.writeFile(pdfPath, Buffer.from(pdfData));
+
+    await execFileAsync("pdftoppm", [
+      "-f",
+      String(pageNumber),
+      "-l",
+      String(pageNumber),
+      "-r",
+      String(dpi),
+      "-jpeg",
+      "-jpegopt",
+      "quality=80",
+      pdfPath,
+      outputPrefix,
+    ]);
+
+    const files = await fs.readdir(tmpDir);
+    const outputFile = files.find(
+      (f) => f.startsWith("page") && /\.jpe?g$/.test(f),
+    );
+    if (!outputFile) {
+      throw new Error(
+        "poppler fallback: no output file produced (is poppler-utils installed?)",
+      );
+    }
+
+    return await fs.readFile(path.join(tmpDir, outputFile));
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
 
 export default async (req: NextApiRequest, res: NextApiResponse) => {
   // check if post method
@@ -237,13 +345,21 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
 
     console.time("toPixmap");
     let scaledPixmap;
+    let mupdfHadCorruptionWarning = false;
     try {
-      scaledPixmap = page.toPixmap(
-        doc_to_screen,
-        mupdf.ColorSpace.DeviceRGB,
-        false,
-        true,
+      const capture = await runWithMupdfWarningCapture(() =>
+        page.toPixmap(doc_to_screen, mupdf.ColorSpace.DeviceRGB, false, true),
       );
+      scaledPixmap = capture.result;
+      mupdfHadCorruptionWarning = capture.hasCorruptionWarning;
+      if (mupdfHadCorruptionWarning) {
+        console.warn(
+          `mupdf reported a corrupted image stream on page ${pageNumber}, will fall back to poppler:`,
+          capture.warnings.filter((w) =>
+            CORRUPTION_WARNING_PATTERNS.some((p) => w.includes(p)),
+          ),
+        );
+      }
     } catch (error) {
       // If pixmap creation fails, try with a smaller scale factor
       console.error(
@@ -257,12 +373,16 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
         reducedScaleFactor,
         reducedScaleFactor,
       );
-      scaledPixmap = page.toPixmap(
-        reduced_doc_to_screen,
-        mupdf.ColorSpace.DeviceRGB,
-        false,
-        true,
+      const capture = await runWithMupdfWarningCapture(() =>
+        page.toPixmap(
+          reduced_doc_to_screen,
+          mupdf.ColorSpace.DeviceRGB,
+          false,
+          true,
+        ),
       );
+      scaledPixmap = capture.result;
+      mupdfHadCorruptionWarning = capture.hasCorruptionWarning;
 
       // Update metadata with actual scale factor used
       actualScaleFactor = reducedScaleFactor;
@@ -276,30 +396,68 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
     }
     console.timeEnd("toPixmap");
 
-    console.time("compare");
-    console.time("asPNG");
-    const pngBuffer = scaledPixmap.asPNG(); // as PNG
-    console.timeEnd("asPNG");
-    console.time("asJPEG");
-    const jpegBuffer = scaledPixmap.asJPEG(80, false); // as JPEG
-    console.timeEnd("asJPEG");
+    let chosenBuffer: Buffer | Uint8Array;
+    let chosenFormat: string;
 
-    const pngSize = pngBuffer.byteLength;
-    const jpegSize = jpegBuffer.byteLength;
-
-    let chosenBuffer;
-    let chosenFormat;
-    if (pngSize < jpegSize) {
-      chosenBuffer = pngBuffer;
-      chosenFormat = "png";
+    if (mupdfHadCorruptionWarning) {
+      // mupdf's decoder choked on an image stream on this page. Re-render
+      // the page with poppler (pdftoppm), which is more tolerant of the
+      // kind of malformed streams that non-conformant PDF exporters (e.g.
+      // Acrobat's PDF Optimizer) sometimes produce.
+      console.time("popplerFallback");
+      try {
+        chosenBuffer = await renderPageWithPoppler(
+          pdfData,
+          pageNumber,
+          actualScaleFactor,
+        );
+        chosenFormat = "jpeg";
+        console.log(
+          `Used poppler fallback for page ${pageNumber} due to mupdf stream warning`,
+        );
+      } catch (fallbackError) {
+        // If the fallback itself fails (e.g. poppler-utils not installed),
+        // log it clearly and fall back to mupdf's own (possibly glitched)
+        // output rather than failing the whole page.
+        log({
+          message: `Poppler fallback failed for page ${pageNumber}, using mupdf output despite corruption warning: \n\n Error: ${fallbackError} \n\n \`Metadata: {teamId: ${teamId}, documentVersionId: ${documentVersionId}, pageNumber: ${pageNumber}}\``,
+          type: "error",
+          mention: true,
+        });
+        const pngBuffer = scaledPixmap.asPNG();
+        const jpegBuffer = scaledPixmap.asJPEG(80, false);
+        if (pngBuffer.byteLength < jpegBuffer.byteLength) {
+          chosenBuffer = pngBuffer;
+          chosenFormat = "png";
+        } else {
+          chosenBuffer = jpegBuffer;
+          chosenFormat = "jpeg";
+        }
+      }
+      console.timeEnd("popplerFallback");
     } else {
-      chosenBuffer = jpegBuffer;
-      chosenFormat = "jpeg";
+      console.time("compare");
+      console.time("asPNG");
+      const pngBuffer = scaledPixmap.asPNG(); // as PNG
+      console.timeEnd("asPNG");
+      console.time("asJPEG");
+      const jpegBuffer = scaledPixmap.asJPEG(80, false); // as JPEG
+      console.timeEnd("asJPEG");
+
+      const pngSize = pngBuffer.byteLength;
+      const jpegSize = jpegBuffer.byteLength;
+
+      if (pngSize < jpegSize) {
+        chosenBuffer = pngBuffer;
+        chosenFormat = "png";
+      } else {
+        chosenBuffer = jpegBuffer;
+        chosenFormat = "jpeg";
+      }
+      console.timeEnd("compare");
     }
 
     console.log("Chosen format:", chosenFormat);
-
-    console.timeEnd("compare");
 
     let buffer = Buffer.from(chosenBuffer);
 
