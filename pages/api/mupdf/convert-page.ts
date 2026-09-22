@@ -68,37 +68,76 @@ function mulberry32(seed: number): () => number {
 // hides their 8-bit steps. The look-back distance is larger than 1 because
 // Ghostscript evaluates shadings in small plateaus (~4 px at 2x), and a
 // 1-px look-back would leave every other plateau row undithered.
+//
+// The noise is shared by DITHER_BLOCK_PX x DITHER_BLOCK_PX blocks rather
+// than drawn per pixel. Per-pixel noise looked perfect in the stored file
+// but the viewer shows the 3840-px page scaled down to the window, and the
+// browser's downscale averages 2-7 pixels into each screen pixel: per-pixel
+// noise averages back to the exact value and the screen re-quantizes it
+// into the same plateaus (measured: 4 distinct values in runs of 100-550
+// rows after a 1.33x-2.7x downscale). 3-px blocks are wider than the
+// browser's averaging kernel at those ratios, so the noise survives, and
+// at 100% the grain is still invisible on a dark fill.
 const DITHER_LOOKBACK_PX = 8;
 const DITHER_SLOPE_LIMIT = 257 * 2; // two 8-bit levels, in 16-bit units
+const DITHER_BLOCK_PX = 3;
 
-function ditherTo8Bit(u16: Uint16Array, width: number, seed: number): Buffer {
+function ditherTo8Bit(
+  u16: Uint16Array,
+  width: number,
+  seed: number,
+): { pixels: Buffer; slopeFraction: number } {
   const out = Buffer.allocUnsafe(u16.length);
   const rand = mulberry32(seed);
   const stride = width * 3;
+  const height = Math.floor(u16.length / stride);
   const back = DITHER_LOOKBACK_PX * stride;
   const left = DITHER_LOOKBACK_PX * 3;
   const T = DITHER_SLOPE_LIMIT;
+  const B = DITHER_BLOCK_PX;
+  // One noise value per block column per channel, regenerated every B rows.
+  const blockCols = Math.ceil(width / B);
+  const noise = new Float32Array(blockCols * 3);
+  let slopeCount = 0;
 
-  for (let i = 0; i < u16.length; i++) {
-    const v = u16[i];
-    let slope = false;
-    if (i >= back) {
-      const d = v - u16[i - back];
-      slope = d !== 0 && d > -T && d < T;
+  for (let y = 0; y < height; y++) {
+    if (y % B === 0) {
+      for (let k = 0; k < noise.length; k++) noise[k] = rand() - rand();
     }
-    if (!slope) {
-      const x = ((i / 3) | 0) % width;
-      if (x >= DITHER_LOOKBACK_PX) {
-        const d = v - u16[i - left];
-        slope = d !== 0 && d > -T && d < T;
+    const rowStart = y * stride;
+    for (let x = 0; x < width; x++) {
+      const nBase = Math.floor(x / B) * 3;
+      const i0 = rowStart + x * 3;
+      for (let c = 0; c < 3; c++) {
+        const i = i0 + c;
+        const v = u16[i];
+        let slope = false;
+        if (i >= back) {
+          const d = v - u16[i - back];
+          slope = d !== 0 && d > -T && d < T;
+        }
+        if (!slope && x >= DITHER_LOOKBACK_PX) {
+          const d = v - u16[i - left];
+          slope = d !== 0 && d > -T && d < T;
+        }
+        let q = v / 257;
+        if (slope) {
+          q += noise[nBase + c];
+          slopeCount++;
+        }
+        out[i] = q <= 0 ? 0 : q >= 255 ? 255 : (q + 0.5) | 0;
       }
     }
-    let q = v / 257;
-    if (slope) q += rand() - rand();
-    out[i] = q <= 0 ? 0 : q >= 255 ? 255 : (q + 0.5) | 0;
   }
-  return out;
+  return { pixels: out, slopeFraction: slopeCount / u16.length };
 }
+
+// PNG is only attempted for pages whose dithered (gradient/photo) area is
+// below this fraction. Encoding a 3840x2160 PNG costs ~1.7 s of CPU and on
+// any page with an image or a gradient it loses to the JPEG by 3-10x, so
+// it was pure waste on most pages. Flat pages (solid fill + a title) are
+// where PNG wins, and they have almost no slope pixels.
+const PNG_ATTEMPT_MAX_SLOPE_FRACTION = 0.03;
 
 async function renderPageWithGhostscript(
   pdfPath: string,
@@ -107,7 +146,7 @@ async function renderPageWithGhostscript(
   targetHeightPx: number,
   widthInPoints: number,
   heightInPoints: number,
-): Promise<{ pngBuffer: Buffer; jpegBuffer: Buffer }> {
+): Promise<{ pngBuffer: Buffer | null; jpegBuffer: Buffer }> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-gs-"));
   const outFile = path.join(tmpDir, "page.tif");
 
@@ -143,7 +182,15 @@ async function renderPageWithGhostscript(
     // toColourspace("rgb16") is required: without it sharp converts the
     // input to 8-bit sRGB internally and raw({depth:"ushort"}) would just
     // upcast 8-bit values, throwing away exactly the precision we need.
-    const { data, info } = await sharp(outFile, { limitInputPixels: false })
+    // ignoreIcc is required too: Ghostscript embeds its own output ICC
+    // profile in the TIFF, and sharp would otherwise "correct" the pixels
+    // through it, shifting colours (red came out ~10 levels too high on
+    // the services book). The PDF's colours are already sRGB; we want the
+    // sample values untouched.
+    const { data, info } = await sharp(outFile, {
+      limitInputPixels: false,
+      ignoreIcc: true,
+    })
       .toColourspace("rgb16")
       .raw({ depth: "ushort" })
       .toBuffer({ resolveWithObject: true });
@@ -157,7 +204,11 @@ async function renderPageWithGhostscript(
     }
 
     const u16 = new Uint16Array(data.buffer, data.byteOffset, data.length / 2);
-    const pixels8 = ditherTo8Bit(u16, info.width, 0x9e3779b9 ^ pageNumber);
+    const { pixels: pixels8, slopeFraction } = ditherTo8Bit(
+      u16,
+      info.width,
+      0x9e3779b9 ^ pageNumber,
+    );
 
     const raw = {
       raw: { width: info.width, height: info.height, channels: 3 as const },
@@ -170,12 +221,17 @@ async function renderPageWithGhostscript(
     // JPEG at q85 with 4:4:4 chroma, not the q80 4:2:0 used elsewhere: the
     // gradient banding is partly a hue shift, and chroma subsampling plus
     // q80 quantization put visible structure back into the dithered ramp.
-    const [pngBuffer, jpegBuffer] = await Promise.all([
-      fit(sharp(pixels8, raw)).png({ adaptiveFiltering: true }).toBuffer(),
-      fit(sharp(pixels8, raw))
-        .jpeg({ quality: 85, chromaSubsampling: "4:4:4" })
-        .toBuffer(),
-    ]);
+    const jpegBuffer = await fit(sharp(pixels8, raw))
+      .jpeg({ quality: 85, chromaSubsampling: "4:4:4" })
+      .toBuffer();
+
+    const pngBuffer =
+      slopeFraction < PNG_ATTEMPT_MAX_SLOPE_FRACTION
+        ? await fit(sharp(pixels8, raw))
+            .png({ adaptiveFiltering: true })
+            .toBuffer()
+        : null;
+
     return { pngBuffer, jpegBuffer };
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
@@ -660,7 +716,8 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
 
     console.time("render");
     try {
-      let rendered: { pngBuffer: Buffer; jpegBuffer: Buffer } | null = null;
+      let rendered: { pngBuffer: Buffer | null; jpegBuffer: Buffer } | null =
+        null;
 
       // Ghostscript (16-bit + dither) first, unless disabled. See the
       // comment at the top of this file.
@@ -694,7 +751,7 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
       }
 
       const { pngBuffer, jpegBuffer } = rendered;
-      if (pngBuffer.byteLength < jpegBuffer.byteLength) {
+      if (pngBuffer && pngBuffer.byteLength < jpegBuffer.byteLength) {
         chosenBuffer = pngBuffer;
         chosenFormat = "png";
       } else {
