@@ -61,6 +61,27 @@ export default async function handle(
       orderBy: { createdAt: "desc" },
     });
 
+    // Tags: each card is already exactly one link, so no union/aggregation
+    // needed here (contrast lib/api/documents/get-tags-by-document.ts, used
+    // by Docket's own Documents list, where one document can have several
+    // links). Batch-fetched in one query rather than per-link, same
+    // N+1-avoidance pattern used throughout this codebase's tag lookups.
+    const linkIds = links.map((link) => link.id);
+    const tagItems = await prisma.tagItem.findMany({
+      where: { itemType: "LINK_TAG", linkId: { in: linkIds } },
+      select: {
+        linkId: true,
+        tag: { select: { id: true, name: true, color: true } },
+      },
+    });
+    const tagsByLinkId = new Map<string, { id: string; name: string; color: string }[]>();
+    for (const item of tagItems) {
+      if (!item.linkId) continue;
+      const existing = tagsByLinkId.get(item.linkId);
+      if (existing) existing.push(item.tag);
+      else tagsByLinkId.set(item.linkId, [item.tag]);
+    }
+
     const baseUrl = process.env.NEXT_PUBLIC_MARKETING_URL;
 
     const cards = links
@@ -80,6 +101,7 @@ export default async function handle(
           url,
           thumbnailUrl: `${baseUrl}/api/public/thumbnail/${link.document!.id}`,
           createdAt: link.createdAt,
+          tags: tagsByLinkId.get(link.id) ?? [],
         };
       });
 

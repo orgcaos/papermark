@@ -35,6 +35,7 @@ import { AddToDataroomModal } from "@/components/documents/add-document-to-datar
 import { DocumentPreviewModal } from "@/components/documents/document-preview-modal";
 import { EditDocumentNameModal } from "@/components/documents/edit-document-name-modal";
 import { MoveToFolderModal } from "@/components/documents/move-folder-modal";
+import TagBadge from "@/components/links/link-sheet/tags/tag-badge";
 import BarChart from "@/components/shared/icons/bar-chart";
 import { Button } from "@/components/ui/button";
 import {
@@ -382,6 +383,23 @@ export default function DocumentsCard({
                 </>
               ) : null}
             </div>
+            {/* Tags -- the union of tags set on this document's own
+                share link(s); see lib/api/documents/get-tags-by-document.ts.
+                Savvas asked for these to show here directly (build-status.md,
+                2026-09-22, "tags on the file") for at-a-glance categorization
+                without opening each link. */}
+            {prismaDocument.tags && prismaDocument.tags.length > 0 ? (
+              <div className="relative z-10 mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
+                {prismaDocument.tags.map((tag) => (
+                  <TagBadge
+                    key={tag.id}
+                    name={tag.name}
+                    color={tag.color as any}
+                    className="px-1.5 py-0 text-[10px] leading-4"
+                  />
+                ))}
+              </div>
+            ) : null}
             {searchQuery || sortQuery ? (
               <div className="relative z-10 mt-1 flex flex-wrap items-center space-x-1 text-xs leading-5 text-muted-foreground">
                 {getBreadcrumbPath(prismaDocument.folderList).map(

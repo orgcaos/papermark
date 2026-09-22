@@ -7,6 +7,7 @@ import { getServerSession } from "next-auth/next";
 
 import { hashToken } from "@/lib/api/auth/token";
 import { isDataroomScopedRole } from "@/lib/api/rbac/permissions";
+import { getTagsByDocumentId } from "@/lib/api/documents/get-tags-by-document";
 import { processDocument } from "@/lib/api/documents/process-document";
 import { errorhandler } from "@/lib/errorHandler";
 import prisma from "@/lib/prisma";
@@ -195,6 +196,11 @@ export default async function handle(
         dataroomCounts.map((dc) => [dc.documentId, dc._count.id]),
       );
 
+      // Tags: see get-tags-by-document.ts -- a document's "tags" are the
+      // union of whatever's set on its own share link(s), the only place
+      // tags are actually assignable today.
+      const tagsByDocumentId = await getTagsByDocumentId(documentIds);
+
       // Combine documents with their counts
       const documentsWithCounts = documents.map((document) => ({
         ...document,
@@ -204,6 +210,7 @@ export default async function handle(
           versions: versionCountMap.get(document.id) || 0,
           datarooms: dataroomCountMap.get(document.id) || 0,
         },
+        tags: tagsByDocumentId[document.id] || [],
       }));
 
       let documentsWithFolderList = documentsWithCounts;

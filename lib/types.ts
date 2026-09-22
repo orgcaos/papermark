@@ -31,6 +31,10 @@ export interface DocumentWithLinksAndLinkCountAndViewCount extends Document {
     datarooms: number;
   };
   links: Link[];
+  // The union of tags set on this document's own share link(s) -- see
+  // lib/api/documents/get-tags-by-document.ts. Not populated by every
+  // endpoint that returns this type; treat as possibly undefined.
+  tags?: TagProps[];
   folder: {
     name: string;
     path: string;
