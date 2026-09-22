@@ -5,7 +5,7 @@ import {
   type StoredFileRef,
 } from "@/lib/types/page-link";
 
-import { getFile } from "./get-file";
+import { getFileServer as getFile } from "./get-file-server";
 
 /**
  * Signs the storage refs (`src` / `poster`) on `gif` / `video` overlay

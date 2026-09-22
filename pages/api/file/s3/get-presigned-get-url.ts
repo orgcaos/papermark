@@ -1,11 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
-import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl as getCloudfrontSignedUrl } from "@aws-sdk/cloudfront-signer";
-import { getSignedUrl as getS3SignedUrl } from "@aws-sdk/s3-request-presigner";
-
-import { ONE_HOUR, ONE_SECOND, TWO_MINUTES } from "@/lib/constants";
-import { getTeamS3ClientAndConfig } from "@/lib/files/aws-client";
+import { presignGetUrl } from "@/lib/files/presign-get-url";
 import { log } from "@/lib/utils";
 
 export default async function handler(
@@ -49,86 +44,14 @@ export default async function handler(
     responseContentDisposition?: string;
   };
 
-  const expiration = Math.min(requestedExpiresIn || TWO_MINUTES, ONE_HOUR);
-
   try {
-    // Extract teamId from key (format: teamId/docId/filename)
-    const teamId = key.split("/")[0];
-    if (!teamId) {
-      log({
-        message: `Invalid key format: ${key}`,
-        type: "error",
-      });
-      return res.status(400).json({ error: "Invalid key format" });
-    }
-
-    const { client, config } = await getTeamS3ClientAndConfig(teamId);
-
-    if (config.distributionHost) {
-      const distributionUrl = new URL(
-        key,
-        `https://${config.distributionHost}`,
-      );
-
-      if (!responseContentDisposition) {
-        const url = getCloudfrontSignedUrl({
-          url: distributionUrl.toString(),
-          keyPairId: `${config.distributionKeyId}`,
-          privateKey: `${config.distributionKeyContents}`,
-          dateLessThan: new Date(Date.now() + expiration).toISOString(),
-        });
-
-        return res.status(200).json({ url });
-      }
-
-      // Use a custom policy (wildcard resource) when overriding
-      // Content-Disposition. The RFC 5987 `filename*=UTF-8''...` syntax
-      // contains `''`, which the canned-policy path can't sign correctly:
-      // the signer leaves `'` literal (encodeURIComponent), but browsers
-      // re-encode it to `%27` on send, so the URL no longer matches what
-      // was signed and CloudFront returns AccessDenied. Signing the
-      // Policy JSON instead of the URL bytes sidesteps the mismatch.
-      distributionUrl.searchParams.set(
-        "response-content-disposition",
-        responseContentDisposition,
-      );
-
-      const resourceBase = `https://${config.distributionHost}${distributionUrl.pathname}`;
-      const policy = JSON.stringify({
-        Statement: [
-          {
-            Resource: `${resourceBase}?*`,
-            Condition: {
-              DateLessThan: {
-                "AWS:EpochTime": Math.floor(
-                  (Date.now() + expiration) / ONE_SECOND,
-                ),
-              },
-            },
-          },
-        ],
-      });
-
-      const url = getCloudfrontSignedUrl({
-        url: distributionUrl.toString(),
-        policy,
-        keyPairId: `${config.distributionKeyId}`,
-        privateKey: `${config.distributionKeyContents}`,
-      });
-
-      return res.status(200).json({ url });
-    }
-
-    const getObjectCommand = new GetObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-      ...(responseContentDisposition
-        ? { ResponseContentDisposition: responseContentDisposition }
-        : {}),
-    });
-
-    const url = await getS3SignedUrl(client, getObjectCommand, {
-      expiresIn: expiration / ONE_SECOND,
+    // Shared in-process signer (lib/files/presign-get-url.ts). The document
+    // view routes sign directly via lib/files/get-file-server.ts now; this
+    // endpoint remains for the client-side proxy and remaining callers.
+    const url = await presignGetUrl({
+      key,
+      expiresIn: requestedExpiresIn,
+      responseContentDisposition,
     });
 
     return res.status(200).json({ url });

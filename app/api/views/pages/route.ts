@@ -6,7 +6,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth/auth-options";
 import { verifyDataroomSession } from "@/lib/auth/dataroom-auth";
 import { verifyPreviewSession } from "@/lib/auth/preview-auth";
-import { getFile } from "@/lib/files/get-file";
+import { getFileServer as getFile } from "@/lib/files/get-file-server";
 import { signPageLinks } from "@/lib/files/sign-page-links";
 import prisma from "@/lib/prisma";
 import { ratelimit } from "@/lib/redis";

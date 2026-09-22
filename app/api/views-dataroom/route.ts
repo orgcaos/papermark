@@ -19,7 +19,7 @@ import { isEmbeddableUrl } from "@/lib/edge-config/embeddable-domains";
 import { sendOtpVerificationEmail } from "@/lib/emails/send-email-otp-verification";
 import { getFeatureFlags } from "@/lib/featureFlags";
 import { getAdvancedExcelFileUrl } from "@/lib/files/advanced-excel-url";
-import { getFile } from "@/lib/files/get-file";
+import { getFileServer as getFile } from "@/lib/files/get-file-server";
 import { signPageLinks } from "@/lib/files/sign-page-links";
 import { newId } from "@/lib/id-helper";
 import {

@@ -106,6 +106,12 @@ export function HorizontalPageContent({
         useMap={`#page-map-${index + 1}`}
         src={page.file || "https://www.papermark.com/_static/blank.gif"}
         alt={`Page ${index + 1}`}
+        // The page being looked at wins the connection; neighbours are only
+        // prefetches. Lowercase attribute spread: React 18 warns on the
+        // camelCase prop (same workaround next/image uses for React < 19).
+        {...({
+          fetchpriority: isCurrentPage ? "high" : "low",
+        } as Record<string, string>)}
       />
 
       {watermarkConfig && watermarkRect ? (

@@ -172,6 +172,23 @@ export default function PagesHorizontalViewer({
     Record<number, { width: number; height: number }>
   >({});
 
+  // Which page images have finished loading (index -> loaded). Used to hold
+  // back the neighbouring pages' <img> tags until the page the visitor is
+  // actually looking at has arrived, so page 1 of a cold open doesn't share
+  // bandwidth with pages it doesn't need yet (each page is ~1MB).
+  const [loadedPages, setLoadedPages] = useState<Set<number>>(
+    () => new Set(),
+  );
+  // Safety valve: if the active page's onload never fires (broken image,
+  // blocked request), still let the neighbours load after a short wait so
+  // navigation isn't left with nothing prefetched.
+  const [neighborTimerElapsed, setNeighborTimerElapsed] = useState(false);
+  useEffect(() => {
+    setNeighborTimerElapsed(false);
+    const timer = setTimeout(() => setNeighborTimerElapsed(true), 4000);
+    return () => clearTimeout(timer);
+  }, [pageNumber]);
+
   const {
     trackPageViewSafely,
     resetTrackingState,
@@ -748,6 +765,30 @@ export default function PagesHorizontalViewer({
       ...prev,
       [index]: dimensions,
     }));
+    // This callback is only wired to the <img>'s onload, so reaching here
+    // means the page image is in.
+    setLoadedPages((prev) => {
+      if (prev.has(index)) return prev;
+      const next = new Set(prev);
+      next.add(index);
+      return next;
+    });
+  };
+
+  // Decides whether a page's <img> should exist in the DOM at all in the
+  // default (non-fullscreen) layout. Previously every page in `pages` was
+  // rendered as a hidden <img>; browsers still download display:none images,
+  // so all 10 initially-signed pages fetched at once on a cold open and page
+  // 1 was the slowest to land. Now: only the active page and its immediate
+  // neighbours are mounted, and the neighbours wait until the active page has
+  // loaded (or the safety timer above fires). Pages further out simply have
+  // no <img> until the visitor gets near them - their signed URLs are still
+  // in `pages`, so mounting them later is instant.
+  const shouldMountPage = (index: number): boolean => {
+    const activeIndex = pageNumber - 1;
+    if (index === activeIndex) return true;
+    if (Math.abs(index - activeIndex) > 1) return false;
+    return loadedPages.has(activeIndex) || neighborTimerElapsed;
   };
 
   const renderPageContent = (page: HorizontalViewerPage, index: number) => (
@@ -770,17 +811,18 @@ export default function PagesHorizontalViewer({
     />
   );
 
-  const renderPage = (page: HorizontalViewerPage, index: number, active: boolean) => (
-    <div
-      key={index}
-      className={cn(
-        "viewer-container relative mx-auto w-full",
-        active ? "flex justify-center" : "hidden",
-      )}
-    >
-      {renderPageContent(page, index)}
-    </div>
-  );
+  const renderPage = (page: HorizontalViewerPage, index: number, active: boolean) =>
+    shouldMountPage(index) ? (
+      <div
+        key={index}
+        className={cn(
+          "viewer-container relative mx-auto w-full",
+          active ? "flex justify-center" : "hidden",
+        )}
+      >
+        {renderPageContent(page, index)}
+      </div>
+    ) : null;
 
   return (
     <div
