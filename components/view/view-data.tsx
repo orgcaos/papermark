@@ -130,7 +130,7 @@ export default function ViewData({
 
   const documentVersionId = document.versions[0]?.id;
 
-  const { pages: lazyPages, ensurePagesLoaded } = useLazyPages({
+  const { pages: lazyPages, ensurePagesLoaded, refreshPageUrl } = useLazyPages({
     initialPages: viewData.pages ?? EMPTY_PAGES,
     viewId: viewData.viewId,
     previewToken: viewData.isPreview ? previewToken : undefined,
@@ -294,6 +294,7 @@ export default function ViewData({
                 linkName={link.name ?? `Link #${link.id.slice(-5)}`}
                 navData={navData}
                 ensurePagesLoaded={ensurePagesLoaded}
+                refreshPageUrl={refreshPageUrl}
               />
             ) : viewData.pages && document.versions[0].isVertical ? (
               <PagesVerticalViewer
@@ -315,6 +316,7 @@ export default function ViewData({
                 linkName={link.name ?? `Link #${link.id.slice(-5)}`}
                 navData={navData}
                 ensurePagesLoaded={ensurePagesLoaded}
+                refreshPageUrl={refreshPageUrl}
               />
             ) : viewData.fileType === "video" ? (
               <VideoViewer

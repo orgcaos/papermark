@@ -57,13 +57,13 @@ export function useLazyPages({
   }, [initialPages]);
 
   const fetchPageUrls = useCallback(
-    async (pageNumbers: number[]) => {
+    async (pageNumbers: number[], { force = false } = {}) => {
       const currentPages = pagesRef.current;
       const needed = pageNumbers.filter(
         (pn) =>
           pn >= 1 &&
           pn <= currentPages.length &&
-          !currentPages[pn - 1]?.file &&
+          (force || !currentPages[pn - 1]?.file) &&
           !pendingRef.current.has(pn),
       );
 
@@ -115,6 +115,23 @@ export function useLazyPages({
     [viewId, previewToken, linkId, documentVersionId, apiEndpoint],
   );
 
+  // Called by the viewers from a page <img>'s onError. The usual cause is an
+  // expired signed URL (the reader took longer to reach this page than the
+  // URL's lifetime) -- re-sign it and let the <img> retry with the new src.
+  // Capped per page so a page that is genuinely missing from storage doesn't
+  // loop; after that the browser's broken-image state stands.
+  const refreshAttemptsRef = useRef<Map<number, number>>(new Map());
+  const MAX_REFRESHES_PER_PAGE = 2;
+  const refreshPageUrl = useCallback(
+    (pageNumber: number) => {
+      const attempts = refreshAttemptsRef.current.get(pageNumber) ?? 0;
+      if (attempts >= MAX_REFRESHES_PER_PAGE) return;
+      refreshAttemptsRef.current.set(pageNumber, attempts + 1);
+      fetchPageUrls([pageNumber], { force: true });
+    },
+    [fetchPageUrls],
+  );
+
   const ensurePagesLoaded = useCallback(
     (currentPage: number) => {
       const currentPages = pagesRef.current;
@@ -135,5 +152,5 @@ export function useLazyPages({
     [preloadRadius, fetchPageUrls],
   );
 
-  return { pages, ensurePagesLoaded, fetchPageUrls };
+  return { pages, ensurePagesLoaded, fetchPageUrls, refreshPageUrl };
 }

@@ -82,6 +82,7 @@ export default function PagesVerticalViewer({
   linkName,
   navData,
   ensurePagesLoaded,
+  refreshPageUrl,
 }: {
   pages: {
     file: string | null;
@@ -106,6 +107,7 @@ export default function PagesVerticalViewer({
   linkName?: string;
   navData: TNavData;
   ensurePagesLoaded?: (currentPage: number) => void;
+  refreshPageUrl?: (pageNumber: number) => void;
 }) {
   const { linkId, documentId, viewId, isPreview, dataroomId, brand } = navData;
   const { isMobile, isTablet } = useMediaQuery();
@@ -1030,6 +1032,11 @@ export default function PagesVerticalViewer({
                               useMap={`#page-map-${index + 1}`}
                               src={page.file}
                               alt={`Page ${index + 1}`}
+                              // Expired signed URL -> re-sign instead of a
+                              // permanent broken-image icon.
+                              onError={() => {
+                                if (page.file) refreshPageUrl?.(index + 1);
+                              }}
                             />
 
                             {watermarkConfig && imageDimensions[index] ? (

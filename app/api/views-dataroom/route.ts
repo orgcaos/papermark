@@ -19,6 +19,7 @@ import { isEmbeddableUrl } from "@/lib/edge-config/embeddable-domains";
 import { sendOtpVerificationEmail } from "@/lib/emails/send-email-otp-verification";
 import { getFeatureFlags } from "@/lib/featureFlags";
 import { getAdvancedExcelFileUrl } from "@/lib/files/advanced-excel-url";
+import { PAGE_URL_TTL } from "@/lib/files/page-url-ttl";
 import { getFileServer as getFile } from "@/lib/files/get-file-server";
 import { signPageLinks } from "@/lib/files/sign-page-links";
 import { newId } from "@/lib/id-helper";
@@ -1309,10 +1310,20 @@ export async function POST(request: NextRequest) {
             return {
               ...otherPage,
               file: inWindow
-                ? await getFile({ data: page.file, type: storageType })
+                ? await getFile({
+                    data: page.file,
+                    type: storageType,
+                    // Page-image URLs used to get the 2-minute default. The
+                    // viewer only fetches a page's image when the reader gets
+                    // near it, so anything opened more than two minutes in
+                    // was a 403 from R2 (broken-image icon). One hour is the
+                    // signer's cap; the client re-signs on load error for
+                    // sessions longer than that (use-lazy-pages.ts).
+                    expiresIn: PAGE_URL_TTL,
+                  })
                 : null,
               pageLinks: inWindow
-                ? ((await signPageLinks(otherPage.pageLinks)) ??
+                ? ((await signPageLinks(otherPage.pageLinks, PAGE_URL_TTL)) ??
                   otherPage.pageLinks)
                 : otherPage.pageLinks,
             };

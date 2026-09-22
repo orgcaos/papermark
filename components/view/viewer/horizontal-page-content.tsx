@@ -37,6 +37,7 @@ export function HorizontalPageContent({
   imageRefs,
   getScaleFactor,
   onImageDimensionsChange,
+  onImageError,
   onLinkClick,
 }: {
   page: HorizontalViewerPage;
@@ -62,6 +63,7 @@ export function HorizontalPageContent({
     index: number,
     dimensions: { width: number; height: number },
   ) => void;
+  onImageError?: (pageNumber: number) => void;
   onLinkClick: (href: string, event: MouseEvent<HTMLAreaElement>) => void;
 }) {
   // 0 makes getContainedImageRect fall back to the full element box.
@@ -106,6 +108,11 @@ export function HorizontalPageContent({
         useMap={`#page-map-${index + 1}`}
         src={page.file || "https://www.papermark.com/_static/blank.gif"}
         alt={`Page ${index + 1}`}
+        // A failed load is almost always an expired signed URL; ask for a
+        // fresh one instead of leaving the broken-image icon on screen.
+        onError={() => {
+          if (page.file) onImageError?.(index + 1);
+        }}
         // The page being looked at wins the connection; neighbours are only
         // prefetches. Lowercase attribute spread: React 18 warns on the
         // camelCase prop (same workaround next/image uses for React < 19).

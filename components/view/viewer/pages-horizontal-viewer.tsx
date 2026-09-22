@@ -74,6 +74,7 @@ export default function PagesHorizontalViewer({
   linkName,
   navData,
   ensurePagesLoaded,
+  refreshPageUrl,
 }: {
   pages: HorizontalViewerPage[];
   feedbackEnabled: boolean;
@@ -93,6 +94,7 @@ export default function PagesHorizontalViewer({
   linkName?: string;
   navData: TNavData;
   ensurePagesLoaded?: (currentPage: number) => void;
+  refreshPageUrl?: (pageNumber: number) => void;
 }) {
   const { isMobile, isPreview, linkId, documentId, viewId, dataroomId, brand } =
     navData;
@@ -807,6 +809,7 @@ export default function PagesHorizontalViewer({
       imageRefs={imageRefs}
       getScaleFactor={getScaleFactor}
       onImageDimensionsChange={handleImageDimensionsChange}
+      onImageError={refreshPageUrl}
       onLinkClick={handleLinkClick}
     />
   );

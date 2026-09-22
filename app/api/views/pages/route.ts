@@ -6,6 +6,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth/auth-options";
 import { verifyDataroomSession } from "@/lib/auth/dataroom-auth";
 import { verifyPreviewSession } from "@/lib/auth/preview-auth";
+import { PAGE_URL_TTL } from "@/lib/files/page-url-ttl";
 import { getFileServer as getFile } from "@/lib/files/get-file-server";
 import { signPageLinks } from "@/lib/files/sign-page-links";
 import prisma from "@/lib/prisma";
@@ -260,10 +261,14 @@ async function fetchAndReturnPages(
       // Re-sign overlay URLs alongside the page-image URL — they share the
       // same TTL and the viewer needs both refreshed when it lazy-loads a
       // page outside the initial window.
-      const signedLinks = await signPageLinks(pageLinks);
+      const signedLinks = await signPageLinks(pageLinks, PAGE_URL_TTL);
       return {
         pageNumber: page.pageNumber,
-        file: await getFile({ data: page.file, type: storageType }),
+        file: await getFile({
+          data: page.file,
+          type: storageType,
+          expiresIn: PAGE_URL_TTL,
+        }),
         ...(signedLinks ? { pageLinks: signedLinks } : {}),
       };
     }),
