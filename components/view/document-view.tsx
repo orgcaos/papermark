@@ -123,6 +123,38 @@ export default function DocumentView({
   const didMount = useRef<boolean>(false);
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Keeps the loading cover (the document's preview image) on screen *over*
+  // the mounted viewer until the viewer's own page-1 <img> has actually
+  // loaded. Without this there's a visible gap: the cover unmounts the
+  // moment /api/views resolves, but the viewer then has to fetch page 1
+  // from its signed R2 URL (a different URL, so the browser can't reuse the
+  // preview), and in between the screen is just the dark background --
+  // preview -> black -> page. Only used for paginated documents; other
+  // types (video, sheet, notion...) have no preview image to hold.
+  const holdsCover = Boolean(document.versions[0]?.hasPages);
+  const [firstPageReady, setFirstPageReady] = useState<boolean>(!holdsCover);
+  const viewerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!submitted || firstPageReady) return;
+    const el = viewerRef.current;
+    if (!el) return;
+    // <img> load events don't bubble, but they do capture, so one listener
+    // on the container sees every page image the viewer mounts. The first
+    // one to finish is the page on screen (neighbours are held back until
+    // it loads -- see pages-horizontal-viewer.tsx). A generous timer backs
+    // this up so a broken image can never leave the cover stuck on top.
+    const done = () => setFirstPageReady(true);
+    const onLoad = (e: Event) => {
+      if ((e.target as HTMLElement)?.tagName === "IMG") done();
+    };
+    el.addEventListener("load", onLoad, true);
+    const timer = setTimeout(done, 8000);
+    return () => {
+      el.removeEventListener("load", onLoad, true);
+      clearTimeout(timer);
+    };
+  }, [submitted, firstPageReady]);
   const [viewData, setViewData] = useState<DEFAULT_DOCUMENT_VIEW_TYPE>({
     viewId: "",
   });
@@ -341,11 +373,17 @@ export default function DocumentView({
     <>
       <ViewerThemeColor color={viewerBackgroundColor} />
       <div
-        className="bg-gray-950"
+        ref={viewerRef}
+        className="relative bg-gray-950"
         style={{
           backgroundColor: viewerBackgroundColor,
         }}
       >
+        {submitted && !firstPageReady ? (
+          <div className="absolute inset-0 z-10">
+            <ViewerLoadingCover documentId={document.id} />
+          </div>
+        ) : null}
         {submitted ? (
           <ViewData
             link={link}
