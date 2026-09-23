@@ -21,6 +21,7 @@ import {
   FolderInputIcon,
   MailIcon,
   MoonIcon,
+  RotateCcwIcon,
   ScanEyeIcon,
   ServerIcon,
   SheetIcon,
@@ -54,6 +55,16 @@ import FileUp from "@/components/shared/icons/file-up";
 import MoreVertical from "@/components/shared/icons/more-vertical";
 import PapermarkSparkle from "@/components/shared/icons/papermark-sparkle";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -149,6 +160,8 @@ export default function DocumentHeader({
   const [nameDraft, setNameDraft] = useState<string>("");
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [isFirstClick, setIsFirstClick] = useState<boolean>(false);
+  const [resetViewsOpen, setResetViewsOpen] = useState<boolean>(false);
+  const [isResettingViews, setIsResettingViews] = useState<boolean>(false);
   const [addDataRoomOpen, setAddDataRoomOpen] = useState<boolean>(false);
   const [moveFolderOpen, setMoveFolderOpen] = useState<boolean>(false);
   const [addDocumentVersion, setAddDocumentVersion] = useState<boolean>(false);
@@ -565,6 +578,40 @@ export default function DocumentHeader({
         error: (err) => err.message || "Failed to delete document. Try again.",
       },
     );
+  };
+
+  const handleResetViews = async () => {
+    setIsResettingViews(true);
+    try {
+      const res = await fetch(`/api/teams/${teamId}/views/reset`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: prismaDocument.id }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to reset views");
+      }
+
+      const { count } = await res.json();
+      toast.success(
+        count > 0
+          ? `Reset ${count} view${count === 1 ? "" : "s"} for this document.`
+          : "No views to reset for this document.",
+      );
+      setResetViewsOpen(false);
+      // Simplest reliable way to refresh every view-derived number on this
+      // page (stat tiles, the chart, the visitor table) after a bulk
+      // archive -- they're spread across several SWR hooks/components.
+      router.reload();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to reset views",
+      );
+    } finally {
+      setIsResettingViews(false);
+    }
   };
 
   const handleRemoveFromDataroom = async () => {
@@ -1056,6 +1103,13 @@ export default function DocumentHeader({
                   </DropdownMenuItem>
                 )}
 
+              {!isDataroomMember && (
+                <DropdownMenuItem onClick={() => setResetViewsOpen(true)}>
+                  <RotateCcwIcon className="mr-2 h-4 w-4" />
+                  Reset views
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuSeparator />
 
               {isDataroomMember ? (
@@ -1085,6 +1139,35 @@ export default function DocumentHeader({
           </DropdownMenu>
         </div>
       </div>
+
+      <AlertDialog open={resetViewsOpen} onOpenChange={setResetViewsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset views for this document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This archives every current view of &quot;{prismaDocument.name}
+              &quot; so it stops counting toward the view count, the visitor
+              list, and the analytics charts -- the same effect as archiving
+              each view individually. Nothing is deleted, and this can be
+              undone view-by-view from the Visitors table if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isResettingViews}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleResetViews();
+              }}
+              disabled={isResettingViews}
+            >
+              {isResettingViews ? "Resetting..." : "Reset views"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Datarooms collapsible section */}
       {dataroomCount > 0 && (

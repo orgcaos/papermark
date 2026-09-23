@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 
 import { useTeam } from "@/context/team-context";
 import { addDays, format } from "date-fns";
-import { FileTextIcon, LinkIcon } from "lucide-react";
+import { FileTextIcon, LinkIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
 import useSWR from "swr";
 
@@ -30,6 +30,17 @@ import ViewsTable from "@/components/analytics/views-table";
 import VisitorsTable from "@/components/analytics/visitors-table";
 import AppLayout from "@/components/layouts/app";
 import { TabMenu } from "@/components/tab-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 
 interface OverviewData {
@@ -81,6 +92,9 @@ export default function DashboardPage() {
     start: Date;
     end: Date;
   }>(defaultRange);
+  const [resetAllViewsOpen, setResetAllViewsOpen] = useState<boolean>(false);
+  const [isResettingAllViews, setIsResettingAllViews] =
+    useState<boolean>(false);
 
   // Check if user has access to data beyond 30 days
   const isPremium = plan !== "free" || !!trial;
@@ -163,6 +177,44 @@ export default function DashboardPage() {
     });
   };
 
+  const handleResetAllViews = async () => {
+    if (!teamInfo?.currentTeam?.id) return;
+    setIsResettingAllViews(true);
+    try {
+      const res = await fetch(
+        `/api/teams/${teamInfo.currentTeam.id}/views/reset`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to reset views");
+      }
+
+      const { count } = await res.json();
+      toast.success(
+        count > 0
+          ? `Reset ${count} view${count === 1 ? "" : "s"} across your team.`
+          : "No views to reset.",
+      );
+      setResetAllViewsOpen(false);
+      // Simplest reliable way to refresh every view-derived number on this
+      // page (stat tiles, the chart, the tables below) after a bulk
+      // archive -- they are spread across several SWR hooks/components.
+      router.reload();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to reset views",
+      );
+    } finally {
+      setIsResettingAllViews(false);
+    }
+  };
+
   const hasNoActivity =
     !isLoading && overview && overview.counts.views === 0;
   const hasLinks = overview?.hasLinks ?? false;
@@ -184,6 +236,14 @@ export default function DashboardPage() {
       <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold tracking-tight sm:text-3xl">Dashboard</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setResetAllViewsOpen(true)}
+          >
+            <RotateCcwIcon className="mr-2 h-4 w-4" />
+            Reset all views
+          </Button>
         </div>
 
         <div className="relative space-y-4">
@@ -338,6 +398,35 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      <AlertDialog open={resetAllViewsOpen} onOpenChange={setResetAllViewsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset all views for your team?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This archives every view across all of your documents and
+              links so they stop counting toward your analytics. It does
+              not delete anything, and archived views can be restored
+              later -- but every view count and chart on this dashboard
+              will reset to zero.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isResettingAllViews}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleResetAllViews();
+              }}
+              disabled={isResettingAllViews}
+            >
+              {isResettingAllViews ? "Resetting..." : "Reset all views"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
