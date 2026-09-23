@@ -40,7 +40,7 @@ export default async function handler(
           id: true,
           _count: {
             select: {
-              views: true,
+              views: { where: { isArchived: false } },
             },
           },
         },

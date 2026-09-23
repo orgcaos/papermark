@@ -100,6 +100,10 @@ export default async function handle(
             by: ["documentId"],
             where: {
               documentId: { in: documentIds },
+              // Archived views (reset via the "Reset views" action) shouldn't
+              // count here either -- this badge is meant to reflect the same
+              // number every analytics-facing query shows.
+              isArchived: false,
             },
             _count: { id: true },
           }),

@@ -95,7 +95,7 @@ export default async function handle(
               visitorGroups: {
                 select: { visitorGroupId: true },
               },
-              _count: { select: { views: true } },
+              _count: { select: { views: { where: { isArchived: false } } } },
             },
           },
         },

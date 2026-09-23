@@ -72,6 +72,7 @@ export default async function handle(
           by: ["documentId"],
           where: {
             documentId: { in: documentIds },
+            isArchived: false,
           },
           _count: { id: true },
         }),
