@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
 import prisma from "@/lib/prisma";
+import { constructLinkUrl } from "@/lib/utils/link-url";
 
 // Internal, server-to-server endpoint: lists every currently-active share
 // link (not expired, not archived, not soft-deleted) with the fields the
@@ -48,6 +49,7 @@ export default async function handle(
         id: true,
         name: true,
         slug: true,
+        shortSlug: true,
         domainId: true,
         domainSlug: true,
         createdAt: true,
@@ -87,9 +89,14 @@ export default async function handle(
     const cards = links
       .filter((link) => link.document)
       .map((link) => {
-        const url = link.domainId
-          ? `https://${link.domainSlug}/${link.slug}`
-          : `${baseUrl}/view/${link.id}`;
+        // Was: `link.domainId ? domain/slug : /view/{id}`, written before
+        // (or never updated for) the shortSlug short-link feature --
+        // every other caller of this data (links-table.tsx, revalidate.ts)
+        // already prefers shortSlug over the raw /view/{id} link via this
+        // same shared helper. This endpoint just never adopted it, so an
+        // active link with a shortSlug and no custom domain was handed out
+        // as its raw cuid link instead of its pretty one.
+        const url = constructLinkUrl(link);
 
         return {
           linkId: link.id,
