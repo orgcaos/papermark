@@ -44,6 +44,9 @@ export default async function handle(
         // only ever opened from a document-link creation flow.
         linkType: "DOCUMENT_LINK",
         documentId: { not: null },
+        // Per-recipient clones (pages/api/internal/links/create.ts) are
+        // one deck's link many times over -- the picker wants the deck once.
+        sourceLinkId: null,
       },
       select: {
         id: true,
