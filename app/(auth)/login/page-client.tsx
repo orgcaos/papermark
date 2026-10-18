@@ -12,18 +12,32 @@ import { z } from "zod";
 import { cn } from "@/lib/utils";
 
 import { LastUsed, useLastUsed } from "@/components/hooks/useLastUsed";
-import Google from "@/components/shared/icons/google";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// NextAuth sends failed sign-ins back here as /login?error=<code>.
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  Verification:
+    "That login code has expired or was already used. Request a new one.",
+  EmailSignin: "The login email could not be sent. Try again.",
+  SessionRequired: "Please sign in to continue.",
+  AccessDenied: "This email address can't sign in to Orgcaos Docket.",
+  default: "Sign-in didn't go through. Request a new code to try again.",
+};
+
 export default function Login() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams?.get("next") ?? undefined;
+  const next =
+    searchParams?.get("next") ?? searchParams?.get("callbackUrl") ?? undefined;
+  const authError = searchParams?.get("error");
+  const authErrorMessage = authError
+    ? (AUTH_ERROR_MESSAGES[authError] ?? AUTH_ERROR_MESSAGES.default)
+    : null;
 
   const [lastUsed, setLastUsed] = useLastUsed();
-  const authMethods = ["google", "email"] as const;
+  const authMethods = ["email"] as const;
   type AuthMethod = (typeof authMethods)[number];
   const [clickedMethod, setClickedMethod] = useState<AuthMethod | undefined>(
     undefined,
@@ -60,6 +74,14 @@ export default function Login() {
               </span>
             </Link>
           </div>
+          {authErrorMessage && (
+            <p
+              className="mx-4 rounded-[4px] bg-red-50 px-3 py-2 text-sm text-red-700 sm:mx-12"
+              role="alert"
+            >
+              {authErrorMessage}
+            </p>
+          )}
           <form
             className="flex flex-col gap-4 px-4 pt-4 sm:px-12"
             onSubmit={(e) => {
@@ -131,31 +153,6 @@ export default function Login() {
               {lastUsed === "credentials" && <LastUsed />}
             </div>
           </form>
-          <p className="py-4 text-center">or</p>
-          <div className="flex flex-col space-y-2 px-4 sm:px-12">
-            <div className="relative">
-              <Button
-                onClick={() => {
-                  setClickedMethod("google");
-                  setLastUsed("google");
-                  signIn("google", {
-                    ...(next && next.length > 0 ? { callbackUrl: next } : {}),
-                  }).then((res) => {
-                    setClickedMethod(undefined);
-                  });
-                }}
-                loading={clickedMethod === "google"}
-                disabled={clickedMethod && clickedMethod !== "google"}
-                className="flex w-full items-center justify-center space-x-2 border border-gray-300 bg-gray-100 font-normal text-gray-900 hover:bg-gray-200"
-              >
-                <Google className="h-5 w-5" />
-                <span>Continue with Google</span>
-                {clickedMethod !== "google" && lastUsed === "google" && (
-                  <LastUsed />
-                )}
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

@@ -1,17 +1,12 @@
-import { isSamlEnforcedForEmailDomain } from "@/lib/api/teams/is-saml-enforced-for-email-domain";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import PasskeyProvider from "@teamhanko/passkeys-next-auth-provider";
 import { type NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
-import GoogleProvider from "next-auth/providers/google";
-import LinkedInProvider from "next-auth/providers/linkedin";
 
 import { identifyUser, trackAnalytics } from "@/lib/analytics";
 import { qstash } from "@/lib/cron";
 import { sendVerificationRequestEmail } from "@/lib/emails/send-verification-request";
 import hanko from "@/lib/hanko";
-import { jackson } from "@/lib/jackson";
 import prisma from "@/lib/prisma";
 import { CustomUser } from "@/lib/types";
 
@@ -25,35 +20,19 @@ function getMainDomainUrl(): string {
 }
 
 export const authOptions: NextAuthOptions = {
+  // Every auth page points at Docket's own screens. Without signIn set,
+  // NextAuth sends sign-in errors to its built-in /api/auth/signin page, which
+  // lists every provider and ends on a "check your email" screen built for
+  // magic links, with no field for the login code.
   pages: {
+    signIn: "/login",
+    verifyRequest: "/auth/email",
     error: "/login",
   },
+  // Email + one-time code is the only way into this single-user deployment.
+  // Google, LinkedIn and SAML were upstream Papermark providers that were
+  // never configured here; listing them only produced dead-end buttons.
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-      allowDangerousEmailAccountLinking: true,
-    }),
-    LinkedInProvider({
-      clientId: process.env.LINKEDIN_CLIENT_ID as string,
-      clientSecret: process.env.LINKEDIN_CLIENT_SECRET as string,
-      authorization: {
-        params: { scope: "openid profile email" },
-      },
-      issuer: "https://www.linkedin.com/oauth",
-      jwks_endpoint: "https://www.linkedin.com/oauth/openid/jwks",
-      profile(profile, tokens) {
-        const defaultImage =
-          "https://cdn-icons-png.flaticon.com/512/174/174857.png";
-        return {
-          id: profile.sub,
-          name: profile.name,
-          email: profile.email,
-          image: profile.picture ?? defaultImage,
-        };
-      },
-      allowDangerousEmailAccountLinking: true,
-    }),
     EmailProvider({
       async sendVerificationRequest({ identifier, url }) {
         const hasValidNextAuthUrl = !!process.env.NEXTAUTH_URL;
@@ -89,98 +68,15 @@ export const authOptions: NextAuthOptions = {
           PasskeyProvider({
             tenant: hanko,
             async authorize({ userId }: { userId: string }) {
-              const user = await prisma.user.findUnique({ where: { id: userId } });
+              const user = await prisma.user.findUnique({
+                where: { id: userId },
+              });
               if (!user) return null;
               return user;
             },
           }),
         ]
       : []),
-    {
-      id: "saml",
-      name: "BoxyHQ SAML",
-      type: "oauth",
-      version: "2.0",
-      checks: ["pkce", "state"],
-      authorization: {
-        url: `${getMainDomainUrl()}/api/auth/saml/authorize`,
-        params: {
-          scope: "",
-          response_type: "code",
-          provider: "saml",
-        },
-      },
-      token: {
-        url: `${getMainDomainUrl()}/api/auth/saml/token`,
-        params: { grant_type: "authorization_code" },
-      },
-      userinfo: `${getMainDomainUrl()}/api/auth/saml/userinfo`,
-      profile: async (profile) => {
-        const name =
-          `${profile.firstName || ""} ${profile.lastName || ""}`.trim() ||
-          null;
-
-        return {
-          id: profile.id || profile.email,
-          name,
-          email: profile.email,
-          image: null,
-        };
-      },
-      options: {
-        clientId: "dummy",
-        clientSecret: process.env.NEXTAUTH_SECRET as string,
-      },
-      allowDangerousEmailAccountLinking: true,
-    },
-    CredentialsProvider({
-      id: "saml-idp",
-      name: "IdP Login",
-      credentials: {
-        code: { type: "text" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.code) return null;
-
-        try {
-          const { oauthController } = await jackson();
-
-          const { access_token } = await oauthController.token({
-            code: credentials.code,
-            grant_type: "authorization_code",
-            redirect_uri: getMainDomainUrl(),
-            client_id: "dummy",
-            client_secret: process.env.NEXTAUTH_SECRET!,
-          });
-
-          if (!access_token) return null;
-
-          const userInfo = await oauthController.userInfo(access_token);
-          if (!userInfo) return null;
-
-          const { email, firstName, lastName, requested } = userInfo as any;
-          if (!email) return null;
-
-          const name = [firstName, lastName].filter(Boolean).join(" ") || email;
-
-          const user = await prisma.user.upsert({
-            where: { email },
-            create: { email, name },
-            update: { name: name || undefined },
-          });
-
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            profile: userInfo,
-          } as any;
-        } catch (error) {
-          console.error("[SAML] Error during SAML authorization:", error);
-          return null;
-        }
-      },
-    }),
   ],
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
