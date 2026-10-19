@@ -4,12 +4,15 @@ import useSWR from "swr";
 
 import { fetcher } from "@/lib/utils";
 
-interface ViewWithDuration extends View {
+export interface ViewWithDuration extends View {
   duration: {
-    data: { pageNumber: string; sum_duration: number }[];
+    // The API sends pageNumber as a number; older code typed it as a string.
+    data: { pageNumber: string | number; sum_duration: number }[];
   };
   totalDuration: number;
   completionRate: number;
+  // Pages in the version this visit saw (absent for video documents).
+  pagesTotal?: number;
 }
 
 interface LinkVisitsResponse {

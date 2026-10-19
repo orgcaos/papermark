@@ -15,8 +15,8 @@ import {
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
 import {
-  countablePlaybackEvents,
   completionRate,
+  countablePlaybackEvents,
   eventsForView,
   resolveVideoLength,
   watchTimeSeconds,
@@ -124,6 +124,8 @@ export default async function handle(
         where: {
           linkId: id,
           teamId: teamId,
+          // "Reset views" archives views; they shouldn't come back here.
+          isArchived: false,
         },
         orderBy: {
           viewedAt: "desc",
@@ -171,10 +173,7 @@ export default async function handle(
       );
 
       // documentId -> versionNumber -> numPages for that exact version.
-      const numPagesByDocumentVersion = new Map<
-        string,
-        Map<number, number>
-      >();
+      const numPagesByDocumentVersion = new Map<string, Map<number, number>>();
       // documentId -> numPages of its current/primary version, used as a
       // fallback when a view's version can't be resolved from Tinybird.
       const currentNumPagesByDocumentId = new Map<string, number>();
@@ -299,7 +298,10 @@ export default async function handle(
             });
             for (const row of pageData.data ?? []) {
               const rows = pageRowsByViewId.get(row.viewId) ?? [];
-              rows.push({ pageNumber: Number(row.pageNumber), sum_duration: row.sum_duration });
+              rows.push({
+                pageNumber: Number(row.pageNumber),
+                sum_duration: row.sum_duration,
+              });
               pageRowsByViewId.set(row.viewId, rows);
             }
           } catch (error) {
@@ -340,11 +342,15 @@ export default async function handle(
 
           const completionStat = completionByViewId.get(view.id);
           let viewCompletion: number;
+          // Page count of the version this visit actually saw, so the
+          // per-page breakdown in the links table can show skipped pages.
+          let pagesTotal: number;
           if (completionStat && view.documentId) {
             const numPages =
               numPagesByDocumentVersion
                 .get(view.documentId)
                 ?.get(completionStat.versionNumber) ?? 0;
+            pagesTotal = numPages;
             viewCompletion = numPages
               ? (completionStat.pagesViewed / numPages) * 100
               : 0;
@@ -357,6 +363,7 @@ export default async function handle(
               ? (currentNumPagesByDocumentId.get(view.documentId) ??
                 currentDocNumPages)
               : currentDocNumPages;
+            pagesTotal = viewNumPages;
             viewCompletion = viewNumPages
               ? (pageRows.length / viewNumPages) * 100
               : 0;
@@ -370,6 +377,7 @@ export default async function handle(
             duration: { data: pageRows },
             totalDuration,
             completionRate: viewCompletion.toFixed(),
+            pagesTotal,
           };
         });
       }

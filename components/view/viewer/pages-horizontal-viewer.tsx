@@ -1,5 +1,5 @@
-import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/router";
 
 import React, { useEffect, useRef, useState } from "react";
 
@@ -166,9 +166,15 @@ export default function PagesHorizontalViewer({
   const mobileViewportRef = useRef<HTMLDivElement>(null);
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const imageRefs = useRef<(HTMLImageElement | null)[]>([]);
-  // Debounces wheel-driven page turns so one continuous trackpad/scroll
-  // gesture doesn't fire through several pages at once.
-  const wheelCooldownRef = useRef(false);
+  // State for handleWheelPageTurn (scroll distance since the gesture began,
+  // when the last turn happened, ...).
+  const wheelStateRef = useRef({
+    accum: 0,
+    lastSign: 0,
+    lastEventAt: 0,
+    lastFlipAt: 0,
+    turnsInGesture: 0,
+  });
 
   const [imageDimensions, setImageDimensions] = useState<
     Record<number, { width: number; height: number }>
@@ -178,9 +184,7 @@ export default function PagesHorizontalViewer({
   // back the neighbouring pages' <img> tags until the page the visitor is
   // actually looking at has arrived, so page 1 of a cold open doesn't share
   // bandwidth with pages it doesn't need yet (each page is ~1MB).
-  const [loadedPages, setLoadedPages] = useState<Set<number>>(
-    () => new Set(),
-  );
+  const [loadedPages, setLoadedPages] = useState<Set<number>>(() => new Set());
   // Safety valve: if the active page's onload never fires (broken image,
   // blocked request), still let the neighbours load after a short wait so
   // navigation isn't left with nothing prefetched.
@@ -498,11 +502,7 @@ export default function PagesHorizontalViewer({
   // click-to-type page number control). Deliberately only targets 1..numPages
   // - the feedback/account-creation virtual "pages" aren't reachable this way.
   const goToPage = (targetPage: number) => {
-    if (
-      targetPage < 1 ||
-      targetPage > numPages ||
-      targetPage === pageNumber
-    ) {
+    if (targetPage < 1 || targetPage > numPages || targetPage === pageNumber) {
       return;
     }
 
@@ -621,6 +621,62 @@ export default function PagesHorizontalViewer({
     onResetZoom: handleResetZoom,
     onToggleFullscreen: toggleFullscreen,
   });
+
+  // Wheel/trackpad page turning works like scrolling a long document: the
+  // further you scroll, the more pages go by. The first page of a gesture
+  // turns after a short distance, so a light swipe or one mouse-wheel notch
+  // is enough; each further page needs WHEEL_NEXT_TURN_PX more travel,
+  // trackpad inertia included, so a long or hard swipe runs through several.
+  const WHEEL_FIRST_TURN_PX = 40;
+  const WHEEL_NEXT_TURN_PX = 220;
+  // Shortest gap between two turns, so each page is seen going by.
+  const WHEEL_MIN_TURN_GAP_MS = 180;
+  // A pause this long between wheel events starts a new gesture.
+  const WHEEL_GESTURE_GAP_MS = 150;
+
+  const handleWheelPageTurn = (e: React.WheelEvent) => {
+    const raw = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    // deltaMode 1 = lines (Firefox mouse wheels), 2 = pages.
+    const delta =
+      e.deltaMode === 1 ? raw * 40 : e.deltaMode === 2 ? raw * 800 : raw;
+    if (delta === 0) return;
+
+    const now = performance.now();
+    const state = wheelStateRef.current;
+    const sign = Math.sign(delta);
+
+    if (
+      now - state.lastEventAt > WHEEL_GESTURE_GAP_MS ||
+      sign !== state.lastSign
+    ) {
+      // New gesture, or a change of direction: start counting afresh.
+      state.accum = 0;
+      state.turnsInGesture = 0;
+    }
+    state.lastEventAt = now;
+    state.lastSign = sign;
+    state.accum += delta;
+
+    const needed =
+      state.turnsInGesture === 0 ? WHEEL_FIRST_TURN_PX : WHEEL_NEXT_TURN_PX;
+    if (Math.abs(state.accum) < needed) return;
+
+    if (now - state.lastFlipAt < WHEEL_MIN_TURN_GAP_MS) {
+      // Too soon for another turn: hold at most one page's worth, so a burst
+      // of scrolling doesn't bank turns that keep firing after it stops.
+      state.accum = sign * needed;
+      return;
+    }
+
+    state.lastFlipAt = now;
+    state.accum = 0;
+    state.turnsInGesture += 1;
+    if (sign > 0) {
+      goToNextPage();
+    } else {
+      goToPreviousPage();
+    }
+  };
 
   // Keep the latest navigation callbacks for the imperative swipe handler,
   // which is bound once and must not close over a stale `pageNumber`.
@@ -757,7 +813,8 @@ export default function PagesHorizontalViewer({
   // which flips `isMobile` to false and would otherwise strand the viewer.
   // Desktop native fullscreen keeps the navbar's exit toggle, so the overlay
   // stays mobile-only there to avoid a duplicate exit button.
-  const showFullscreenOverlay = isFullscreen && (isMobile || isPseudoFullscreen);
+  const showFullscreenOverlay =
+    isFullscreen && (isMobile || isPseudoFullscreen);
 
   const handleImageDimensionsChange = (
     index: number,
@@ -786,10 +843,13 @@ export default function PagesHorizontalViewer({
   // loaded (or the safety timer above fires). Pages further out simply have
   // no <img> until the visitor gets near them - their signed URLs are still
   // in `pages`, so mounting them later is instant.
+  // Two pages ahead rather than one, since a longer scroll now turns several
+  // pages in a row (see handleWheelPageTurn).
   const shouldMountPage = (index: number): boolean => {
     const activeIndex = pageNumber - 1;
     if (index === activeIndex) return true;
-    if (Math.abs(index - activeIndex) > 1) return false;
+    const offset = index - activeIndex;
+    if (offset < -1 || offset > 2) return false;
     return loadedPages.has(activeIndex) || neighborTimerElapsed;
   };
 
@@ -814,7 +874,11 @@ export default function PagesHorizontalViewer({
     />
   );
 
-  const renderPage = (page: HorizontalViewerPage, index: number, active: boolean) =>
+  const renderPage = (
+    page: HorizontalViewerPage,
+    index: number,
+    active: boolean,
+  ) =>
     shouldMountPage(index) ? (
       <div
         key={index}
@@ -959,7 +1023,7 @@ export default function PagesHorizontalViewer({
             >
               <div
                 ref={scrollContainerRef}
-                className="h-full w-full cursor-pointer overflow-auto"
+                className="h-full w-full cursor-pointer overflow-auto overscroll-none"
                 // Let one-finger drags scroll/pan while our pinch handler
                 // owns two-finger zoom. Without this the browser's own
                 // pinch-zoom fights the scroll container on mobile.
@@ -972,29 +1036,14 @@ export default function PagesHorizontalViewer({
                     return;
                   goToNextPage();
                 }}
+                // (overscroll-none on this element keeps a sideways trackpad
+                // swipe from triggering the browser's back/forward navigation.)
                 onWheel={(e) => {
                   // Only take over the scroll wheel at default zoom - once
                   // zoomed in, wheel should pan around the page like normal
                   // scrolling, not flip pages out from under the user.
                   if (isMobile || scale > 1) return;
-                  if (wheelCooldownRef.current) return;
-
-                  const delta =
-                    Math.abs(e.deltaY) >= Math.abs(e.deltaX)
-                      ? e.deltaY
-                      : e.deltaX;
-                  if (Math.abs(delta) < 10) return; // ignore trackpad jitter
-
-                  e.preventDefault();
-                  wheelCooldownRef.current = true;
-                  if (delta > 0) {
-                    goToNextPage();
-                  } else {
-                    goToPreviousPage();
-                  }
-                  setTimeout(() => {
-                    wheelCooldownRef.current = false;
-                  }, 500);
+                  handleWheelPageTurn(e);
                 }}
               >
                 {/* Sizer defines the scrollable layout size at current scale.
